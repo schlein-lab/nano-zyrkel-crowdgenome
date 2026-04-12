@@ -1,0 +1,33 @@
+name: Fetch & Split Assembly
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Weekly Monday 3am UTC
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests biopython
+
+      - name: Fetch HPRC assembly data
+        run: python scripts/split-assembly.py
+        env:
+          ASSEMBLY_SOURCE: HPRC-HG002
+          CHUNK_SIZE_BP: 5000
+
+      - name: Commit new chunks
+        run: |
+          git config user.name "nano-zyrkel-bot"
+          git config user.email "bot@zyrkel.com"
+          git add data/ staging/chunks/
+          git diff --cached --quiet || git commit -m "crowdgenome: new assembly chunks"
+          git push

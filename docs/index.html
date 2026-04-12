@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>CrowdGenome — Mapping the Dark Genome</title>
+  <meta name="description" content="Distributed pangenome analysis. Your browser helps map the parts of human DNA missing from the reference genome.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="header">
+    <h1>CrowdGenome</h1>
+    <p class="header__sub">Mapping the Dark Genome — powered by <a href="https://zyrkel.com">Zyrkel</a></p>
+  </header>
+
+  <main>
+    <!-- Stats Bar -->
+    <section class="stats-bar" id="stats">
+      <div class="stat">
+        <span class="stat__value" id="stat-chunks">--</span>
+        <span class="stat__label">chunks analyzed</span>
+      </div>
+      <div class="stat">
+        <span class="stat__value" id="stat-dark">--</span>
+        <span class="stat__label">dark regions found</span>
+      </div>
+      <div class="stat">
+        <span class="stat__value" id="stat-contributors">--</span>
+        <span class="stat__label">contributors</span>
+      </div>
+      <div class="stat">
+        <span class="stat__value" id="stat-cpu">--</span>
+        <span class="stat__label">CPU hours donated</span>
+      </div>
+      <div class="stat">
+        <span class="stat__value" id="stat-coverage">--%</span>
+        <span class="stat__label">genome covered</span>
+      </div>
+    </section>
+
+    <!-- Karyogram — all chromosomes at a glance -->
+    <section class="panel" id="karyogram-panel">
+      <h2>Karyogram</h2>
+      <p class="panel__desc">Each chromosome colored by analysis completion. Click to zoom in.</p>
+      <div class="karyogram" id="karyogram">
+        <!-- 22 autosomes + X + Y, rendered by JS -->
+      </div>
+    </section>
+
+    <!-- Contig Track — zoom into one chromosome -->
+    <section class="panel" id="contig-panel" hidden>
+      <div class="panel__header">
+        <button class="btn-back" id="btn-back-karyo">&larr; All chromosomes</button>
+        <h2 id="contig-title">chr1</h2>
+      </div>
+      <p class="panel__desc">Contigs mapped to this chromosome. Green = mapped, red = dark region, gray = pending.</p>
+      <div class="contig-track" id="contig-track">
+        <!-- Rendered by JS: linear track with colored blocks -->
+      </div>
+      <div class="contig-legend">
+        <span class="legend-item"><span class="legend-swatch" style="background: var(--color-mapped)"></span> Mapped</span>
+        <span class="legend-item"><span class="legend-swatch" style="background: var(--color-dark)"></span> Dark region</span>
+        <span class="legend-item"><span class="legend-swatch" style="background: var(--color-pending)"></span> Pending</span>
+      </div>
+    </section>
+
+    <!-- Alignment Detail — click a contig -->
+    <section class="panel" id="alignment-panel" hidden>
+      <div class="panel__header">
+        <button class="btn-back" id="btn-back-contig">&larr; Chromosome view</button>
+        <h2 id="alignment-title">Chunk #--</h2>
+      </div>
+      <div class="alignment-detail" id="alignment-detail">
+        <div class="alignment-meta" id="alignment-meta">
+          <!-- Position, mapping %, mismatches, insertions, deletions -->
+        </div>
+        <div class="alignment-viz" id="alignment-viz">
+          <!-- Linear alignment visualization: reference vs query -->
+        </div>
+        <div class="alignment-dark" id="alignment-dark">
+          <!-- Dark region highlights -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Feed -->
+    <section class="panel" id="feed-panel">
+      <h2>Live Feed</h2>
+      <p class="panel__desc">Real-time mappings from contributors worldwide.</p>
+      <div class="live-feed" id="live-feed">
+        <div class="feed-item feed-item--placeholder">Waiting for first analysis...</div>
+      </div>
+    </section>
+
+    <!-- Pipeline Status -->
+    <section class="panel" id="pipeline-panel">
+      <h2>Your Browser</h2>
+      <p class="panel__desc">Running minimap2 &rarr; samtools &rarr; bedtools on a pangenome chunk.</p>
+      <div class="pipeline" id="pipeline">
+        <div class="pipeline__step" data-step="minimap2">
+          <span class="pipeline__tool">minimap2</span>
+          <span class="pipeline__desc">Aligning against GRCh38</span>
+          <progress value="0" max="100"></progress>
+        </div>
+        <div class="pipeline__step" data-step="samtools">
+          <span class="pipeline__tool">samtools</span>
+          <span class="pipeline__desc">Processing alignment</span>
+          <progress value="0" max="100"></progress>
+        </div>
+        <div class="pipeline__step" data-step="bedtools">
+          <span class="pipeline__tool">bedtools</span>
+          <span class="pipeline__desc">Finding dark regions</span>
+          <progress value="0" max="100"></progress>
+        </div>
+      </div>
+      <div class="pipeline__result" id="pipeline-result">Initializing...</div>
+    </section>
+
+    <!-- LLM Daily Summary -->
+    <section class="panel" id="summary-panel">
+      <h2>Daily Summary</h2>
+      <p class="panel__desc">LLM-generated analysis of today's findings.</p>
+      <blockquote class="summary" id="daily-summary">Loading...</blockquote>
+      <time class="summary__time" id="summary-time"></time>
+    </section>
+
+    <!-- Email Signup -->
+    <section class="panel" id="email-panel">
+      <h2>Get notified</h2>
+      <p class="panel__desc">Receive email alerts when milestones are reached or dark regions are discovered.</p>
+      <form class="email-form" id="email-form">
+        <input type="email" placeholder="your@email.com" required>
+        <button type="submit">Subscribe</button>
+      </form>
+      <p class="email-note">Milestones: 10%, 25%, 50%, 75%, 100% genome coverage. Dark region alerts for clinically relevant loci.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>
+      <a href="https://github.com/schlein-lab/nano-zyrkel-crowdgenome">Source</a> &middot;
+      <a href="https://zyrkel.com">Zyrkel</a> &middot;
+      <a href="https://github.com/schlein-lab/nano-zyrkel">nano-zyrkel SDK</a> &middot;
+      <a href="https://humanpangenome.org">HPRC</a> &middot;
+      <a href="https://biowasm.com">biowasm</a>
+    </p>
+    <p>Data: HPRC (public domain). Tools: minimap2, samtools, bedtools (MIT). Framework: nano-zyrkel (MIT).</p>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

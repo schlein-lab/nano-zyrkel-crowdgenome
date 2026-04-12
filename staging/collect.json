@@ -1,0 +1,20 @@
+{
+  "total_chunks": 0,
+  "total_chunks_available": 0,
+  "completed_chunks": 0,
+  "total_contributors": 0,
+  "cpu_hours": 0,
+  "dark_regions_found": 0,
+  "novel_sequences": 0,
+  "mismatches_total": 0,
+  "insertions_total": 0,
+  "deletions_total": 0,
+  "genome_coverage_pct": 0,
+  "chromosomes": {},
+  "last_updated": "2026-04-12T00:00:00Z",
+  "cross_references": {
+    "clinvar_matches": 0,
+    "gnomad_matches": 0,
+    "dbvar_matches": 0
+  }
+}

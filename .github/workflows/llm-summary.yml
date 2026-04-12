@@ -1,0 +1,36 @@
+name: LLM Daily Summary
+
+on:
+  schedule:
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate daily summary
+        run: |
+          COLLECT=$(cat staging/collect.json)
+          PROMPT="You are a genomics research assistant. Summarize today's crowdgenome findings based on this data: ${COLLECT}. Be concise (2-3 sentences). Mention: chunks analyzed, dark regions found, notable chromosomes, contributor count. If data is empty, say the project is initializing."
+
+          # Use Codex CLI or curl to Anthropic API
+          SUMMARY=$(echo "$PROMPT" | codex --print 2>/dev/null || echo "Summary generation pending — Codex CLI not available in this runner.")
+
+          # Write summary JSON
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          jq -n \
+            --arg summary "$SUMMARY" \
+            --arg timestamp "$TIMESTAMP" \
+            '{summary: $summary, timestamp: $timestamp, highlights: [], milestones_reached: [], dark_regions_today: 0, contributors_today: 0}' \
+            > staging/llm-summary.json
+
+      - name: Commit summary
+        run: |
+          git config user.name "nano-zyrkel-bot"
+          git config user.email "bot@zyrkel.com"
+          git add staging/llm-summary.json
+          git diff --cached --quiet || git commit -m "crowdgenome: daily LLM summary"
+          git push

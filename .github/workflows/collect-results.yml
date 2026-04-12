@@ -1,0 +1,35 @@
+name: Collect & Aggregate Results
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Aggregate results
+        run: python scripts/aggregate-results.py
+
+      - name: Cross-reference databases
+        run: python scripts/cross-reference.py
+        env:
+          NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
+
+      - name: Commit updated staging data
+        run: |
+          git config user.name "nano-zyrkel-bot"
+          git config user.email "bot@zyrkel.com"
+          git add staging/
+          git diff --cached --quiet || git commit -m "crowdgenome: update staging data"
+          git push
