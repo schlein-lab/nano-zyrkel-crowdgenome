@@ -322,12 +322,10 @@ function highlightChr(chrName) {
 function updateProgress() {
   const pctEl = $('[data-nano-progress-pct]');
   if (pctEl) {
-    // Honest: each chunk needs 686 tile-alignments to be "covered".
-    // Covered chunks = total alignments / 686.
-    const coveredChunks = Math.floor(communityCount / 686);
-    const coveredBases = coveredChunks * 5000;
-    const pct = (coveredBases / GENOME_SIZE) * 100;
-    pctEl.textContent = pct < 0.001 ? `${coveredChunks} chunks resolved` : `${pct.toFixed(4)}%`;
+    // Total alignments needed: 610,315 chunks × 686 tiles = 418,676,090
+    const totalNeeded = TOTAL_CHUNKS * 686;
+    const pct = (communityCount / totalNeeded) * 100;
+    pctEl.textContent = `${pct.toFixed(4)}%`;
   }
 }
 
