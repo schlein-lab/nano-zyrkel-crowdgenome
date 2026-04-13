@@ -546,13 +546,14 @@ async function analyzeChunk() {
     compute_ms: mm2Ms,
     session_id: getSessionId(),
   });
-  // sendBeacon: fire-and-forget, no CORS preflight with text/plain
-  const beaconOk = navigator.sendBeacon(`${API}/result`, new Blob([payload], { type: 'text/plain' }));
-  setStep('submit', beaconOk ? 'done' : null);
-  // Debug: show submit status in UI
-  const submitDebug = $('[data-nano-submit-debug]');
-  if (submitDebug) submitDebug.textContent = beaconOk ? `\u2713 submitted #${chunkId}` : `\u2717 beacon failed #${chunkId}`;
-  if (!beaconOk) console.warn('[crowdgenome] sendBeacon failed for chunk', chunkId);
+  // Submit via fetch (keepalive) — more reliable than sendBeacon for high throughput
+  fetch(`${API}/result`, {
+    method: 'POST',
+    body: payload,
+    keepalive: true,
+    headers: { 'Content-Type': 'text/plain' },
+  }).catch(() => {});
+  setStep('submit', 'done');
 
   // Update community counter
   updateCommunityCount();
