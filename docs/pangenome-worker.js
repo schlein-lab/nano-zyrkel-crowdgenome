@@ -36,9 +36,9 @@ const CHRS = [
 const chrColor = (i) => `oklch(0.60 0.12 ${(i / CHRS.length) * 360})`;
 
 // ---- State ----
-let sessionChunks = parseInt(sessionStorage.getItem('cg-chunks') || '0');
-let sessionDark = parseInt(sessionStorage.getItem('cg-dark') || '0');
-let sessionBases = parseInt(sessionStorage.getItem('cg-bases') || '0');
+let sessionChunks = parseInt(localStorage.getItem('cg-chunks') || '0');
+let sessionDark = parseInt(localStorage.getItem('cg-dark') || '0');
+let sessionBases = parseInt(localStorage.getItem('cg-bases') || '0');
 let running = false;
 let analyzedChrs = {};
 
@@ -49,11 +49,11 @@ let currentTile = null;     // { key, chr, index, text }
 let chunkQueue = [];         // chunk IDs to process
 let queueInfo = null;        // from active.json
 let prefetchCache = new Map(); // chunk_id → fasta text (prefetched)
-let doneChunks = new Set(JSON.parse(sessionStorage.getItem('cg-done') || '[]'));
+let doneChunks = new Set(JSON.parse(localStorage.getItem('cg-done') || '[]'));
 let resultBatch = [];
 // Track which 10k blocks are fully done (survives reload, compact)
-let doneBlocks = new Set(JSON.parse(sessionStorage.getItem('cg-done-blocks') || '[]'));
-let currentBlockStart = parseInt(sessionStorage.getItem('cg-block-start') || '0');
+let doneBlocks = new Set(JSON.parse(localStorage.getItem('cg-done-blocks') || '[]'));
+let currentBlockStart = parseInt(localStorage.getItem('cg-block-start') || '0');
 
 // ---- DOM ----
 const $ = (sel) => document.querySelector(sel);
@@ -360,8 +360,8 @@ function updateCommunityCount() {
 }
 
 function getSessionId() {
-  let id = sessionStorage.getItem('crowdgenome-session');
-  if (!id) { id = crypto.randomUUID?.() || `${Date.now()}`; sessionStorage.setItem('crowdgenome-session', id); }
+  let id = localStorage.getItem('crowdgenome-session');
+  if (!id) { id = crypto.randomUUID?.() || `${Date.now()}`; localStorage.setItem('crowdgenome-session', id); }
   return id;
 }
 
@@ -434,8 +434,8 @@ async function loadQueue() {
 
     // Persist current position
     currentBlockStart = start;
-    sessionStorage.setItem('cg-block-start', start);
-    sessionStorage.setItem('cg-done-blocks', JSON.stringify([...doneBlocks]));
+    localStorage.setItem('cg-block-start', start);
+    localStorage.setItem('cg-done-blocks', JSON.stringify([...doneBlocks]));
 
     // Shuffle within block
     for (let i = ids.length - 1; i > 0; i--) {
@@ -451,7 +451,7 @@ async function loadQueue() {
         if (id >= start && id < start + 20000) keep.add(id);
       }
       doneChunks = keep;
-      sessionStorage.setItem('cg-done', JSON.stringify([...doneChunks]));
+      localStorage.setItem('cg-done', JSON.stringify([...doneChunks]));
     }
 
     if (posEl) posEl.textContent = `${queueInfo.tile.chr} tile ${queueInfo.tile.index} \u2014 ${chunkQueue.length} chunks queued`;
@@ -599,15 +599,15 @@ async function analyzeChunk() {
   // Mark chunk as done locally (skip on future reloads)
   doneChunks.add(chunkId);
   if (doneChunks.size <= 50000) {
-    sessionStorage.setItem('cg-done', JSON.stringify([...doneChunks]));
+    localStorage.setItem('cg-done', JSON.stringify([...doneChunks]));
   }
 
   // ── Update counters ──
   sessionChunks++;
   if (isDivergent) sessionDark++;
-  sessionStorage.setItem('cg-chunks', sessionChunks);
-  sessionStorage.setItem('cg-dark', sessionDark);
-  sessionStorage.setItem('cg-bases', sessionBases);
+  localStorage.setItem('cg-chunks', sessionChunks);
+  localStorage.setItem('cg-dark', sessionDark);
+  localStorage.setItem('cg-bases', sessionBases);
   const chrClean = pos.chr.replace(/^chr/, '');
   analyzedChrs[chrClean] = (analyzedChrs[chrClean] || 0) + 1;
 
