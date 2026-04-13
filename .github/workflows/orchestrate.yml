@@ -1,0 +1,29 @@
+name: Orchestrate CrowdGenome
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # Every 10 minutes
+  workflow_dispatch:
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nano-zyrkel
+        run: cargo install nano-zyrkel --locked 2>/dev/null || echo "Using pre-built binary"
+
+      - name: Run nano-zyrkel with crowdgenome plugin
+        run: nano-zyrkel run --config hats/config.json
+        env:
+          DO_SPACES_ACCESS_KEY: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          DO_SPACES_SECRET_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+
+      - name: Commit updated staging data
+        run: |
+          git config user.name "nano-zyrkel-bot"
+          git config user.email "bot@zyrkel.com"
+          git add staging/
+          git diff --cached --quiet || git commit -m "crowdgenome: orchestrate — update queue + results"
+          git push
