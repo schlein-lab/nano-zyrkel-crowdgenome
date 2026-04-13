@@ -336,7 +336,7 @@ let lastCommunityRefresh = 0;
 
 async function loadCommunityCount() {
   try {
-    const res = await fetch(`${API}/results/count`);
+    const res = await fetch(`${API}/results/count?t=${Date.now()}`);
     if (res.ok) {
       const { count } = await res.json();
       communityCount = count;
