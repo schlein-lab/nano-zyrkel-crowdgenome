@@ -50,7 +50,10 @@ let chunkQueue = [];         // chunk IDs to process
 let queueInfo = null;        // from active.json
 let prefetchCache = new Map(); // chunk_id → fasta text (prefetched)
 let doneChunks = new Set(JSON.parse(sessionStorage.getItem('cg-done') || '[]'));
-let resultBatch = []; // collect results, send in batches of 50
+let resultBatch = [];
+// Track which 10k blocks are fully done (survives reload, compact)
+let doneBlocks = new Set(JSON.parse(sessionStorage.getItem('cg-done-blocks') || '[]'));
+let currentBlockStart = parseInt(sessionStorage.getItem('cg-block-start') || '0');
 
 // ---- DOM ----
 const $ = (sel) => document.querySelector(sel);
@@ -407,30 +410,49 @@ async function loadQueue() {
       currentTile = { ...queueInfo.tile, text: await tileRes.text() };
     }
 
-    // Build chunk queue: skip already-done chunks
-    // If batch is exhausted, auto-advance to next 10k block
-    let start = queueInfo.batch.start;
-    let end = queueInfo.batch.end;
-
-    // Check if we've done everything in this batch — advance locally
+    // Build chunk queue: auto-advance through ALL 610k chunks, never stop
+    // Start from where we left off (persisted in sessionStorage)
+    let start = currentBlockStart;
+    let end = start + 10000;
     let ids = [];
-    while (ids.length === 0 && start < TOTAL_CHUNKS) {
+
+    // Skip fully-done blocks
+    let attempts = 0;
+    while (ids.length === 0 && attempts < 62) { // 62 blocks × 10k = 620k > 610k
+      ids = [];
       for (let i = start; i < end && i < TOTAL_CHUNKS; i++) {
         if (!doneChunks.has(i)) ids.push(i);
       }
       if (ids.length === 0) {
-        // This batch is done, try next 10k
-        start = end;
-        end = Math.min(start + 10000, TOTAL_CHUNKS);
+        doneBlocks.add(start);
+        start += 10000;
+        end = start + 10000;
+        if (start >= TOTAL_CHUNKS) start = 0; // wrap around
+        attempts++;
       }
     }
 
-    // Shuffle (Fisher-Yates)
+    // Persist current position
+    currentBlockStart = start;
+    sessionStorage.setItem('cg-block-start', start);
+    sessionStorage.setItem('cg-done-blocks', JSON.stringify([...doneBlocks]));
+
+    // Shuffle within block
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [ids[i], ids[j]] = [ids[j], ids[i]];
     }
     chunkQueue = ids;
+
+    // Prune doneChunks if it gets too large (keep only current block's IDs)
+    if (doneChunks.size > 30000) {
+      const keep = new Set();
+      for (const id of doneChunks) {
+        if (id >= start && id < start + 20000) keep.add(id);
+      }
+      doneChunks = keep;
+      sessionStorage.setItem('cg-done', JSON.stringify([...doneChunks]));
+    }
 
     if (posEl) posEl.textContent = `${queueInfo.tile.chr} tile ${queueInfo.tile.index} \u2014 ${chunkQueue.length} chunks queued`;
     return true;
