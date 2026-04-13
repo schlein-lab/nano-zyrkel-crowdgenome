@@ -332,6 +332,7 @@ function updateProgress(len) {
 }
 
 let communityCount = 0;
+let localSinceRefresh = 0;
 let lastCommunityRefresh = 0;
 
 async function loadCommunityCount() {
@@ -340,6 +341,7 @@ async function loadCommunityCount() {
     if (res.ok) {
       const { count } = await res.json();
       communityCount = count;
+      localSinceRefresh = 0;
       const el = $('[data-nano-community-chunks]');
       if (el) el.textContent = count.toLocaleString();
     }
@@ -348,13 +350,13 @@ async function loadCommunityCount() {
 }
 
 function updateCommunityCount() {
-  // Increment locally between server refreshes
-  communityCount++;
+  // Optimistic increment between server polls
+  localSinceRefresh++;
   const el = $('[data-nano-community-chunks]');
-  if (el) el.textContent = communityCount.toLocaleString();
+  if (el) el.textContent = (communityCount + localSinceRefresh).toLocaleString();
 
-  // Refresh from server every 30 seconds
-  if (Date.now() - lastCommunityRefresh > 30000) {
+  // Re-sync from server every 15 seconds
+  if (Date.now() - lastCommunityRefresh > 15000) {
     loadCommunityCount();
   }
 }
