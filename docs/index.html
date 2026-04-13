@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>CrowdGenome — Mapping the Dark Genome</title>
-  <!-- coi-serviceworker removed: breaks cross-origin API calls on GitHub Pages.
-       minimap2 WASM needs SharedArrayBuffer which requires COOP/COEP headers
-       that GitHub Pages doesn't provide. JS-only analysis still works. -->
+  <script>
+  // Kill any previously registered service worker (coi-serviceworker broke cross-origin)
+  navigator.serviceWorker?.getRegistrations().then(regs => {
+    regs.forEach(r => r.unregister());
+  });
+  </script>
   <style>
 :root {
   color-scheme: dark;
