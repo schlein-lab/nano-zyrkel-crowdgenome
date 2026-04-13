@@ -50,6 +50,7 @@ let chunkQueue = [];         // chunk IDs to process
 let queueInfo = null;        // from active.json
 let prefetchCache = new Map(); // chunk_id → fasta text (prefetched)
 let doneChunks = new Set(JSON.parse(sessionStorage.getItem('cg-done') || '[]'));
+let resultBatch = []; // collect results, send in batches of 50
 
 // ---- DOM ----
 const $ = (sel) => document.querySelector(sel);
@@ -546,13 +547,18 @@ async function analyzeChunk() {
     compute_ms: mm2Ms,
     session_id: getSessionId(),
   });
-  // Submit via fetch (keepalive) — more reliable than sendBeacon for high throughput
-  fetch(`${API}/result`, {
-    method: 'POST',
-    body: payload,
-    keepalive: true,
-    headers: { 'Content-Type': 'text/plain' },
-  }).catch(() => {});
+  // Batch results — send every 50 chunks as one request
+  resultBatch.push(JSON.parse(payload));
+  if (resultBatch.length >= 50) {
+    const batch = JSON.stringify(resultBatch);
+    resultBatch = [];
+    fetch(`${API}/result`, {
+      method: 'POST',
+      body: batch,
+      keepalive: true,
+      headers: { 'Content-Type': 'text/plain' },
+    }).catch(() => {});
+  }
   setStep('submit', 'done');
 
   // Update community counter
