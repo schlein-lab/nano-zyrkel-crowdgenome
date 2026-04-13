@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>CrowdGenome — Mapping the Dark Genome</title>
-  <script src="coi-serviceworker.js"></script>
+  <!-- coi-serviceworker removed: breaks cross-origin API calls on GitHub Pages.
+       minimap2 WASM needs SharedArrayBuffer which requires COOP/COEP headers
+       that GitHub Pages doesn't provide. JS-only analysis still works. -->
   <style>
 :root {
   color-scheme: dark;
