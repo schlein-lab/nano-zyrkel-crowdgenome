@@ -1,0 +1,24 @@
+{
+  "name": "nano-zyrkel-wasm-core",
+  "type": "module",
+  "collaborators": [
+    "Christian Schlein"
+  ],
+  "description": "nano-zyrkel WASM core — generic data + visualization building blocks for browser-side nano-zyrkel apps",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/schlein-lab/nano-zyrkel"
+  },
+  "files": [
+    "nano_zyrkel_wasm_core_bg.wasm",
+    "nano_zyrkel_wasm_core.js",
+    "nano_zyrkel_wasm_core.d.ts"
+  ],
+  "main": "nano_zyrkel_wasm_core.js",
+  "types": "nano_zyrkel_wasm_core.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

@@ -54,7 +54,7 @@ async function loadStats() {
 
   // Load LLM summary
   try {
-    const res = await fetch(`${GITHUB_RAW}/staging/llm-summary.json`);
+    const res = await fetch(`${GITHUB_RAW}/staging/crowdgenome/llm-summary.json`);
     if (res.ok) {
       const data = await res.json();
       setText('daily-summary', data.summary || 'No summary available yet.');

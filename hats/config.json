@@ -1,42 +1,20 @@
 {
-  "schema": "1",
   "id": "crowdgenome",
-  "type": "crawler",
+  "description": "Distributed Dark Genome mapping — crowd-sourced pangenome alignment via browser WASM",
+  "type": "tracker",
   "lang": "en",
-  "description": "Distributed Dark Genome mapping — crowd-sourced pangenome analysis via browser WASM",
-
   "source": {
-    "url": "https://raw.githubusercontent.com/christian-schlein/nano-zyrkel-crowdgenome/main/staging/collect.json",
+    "url": "https://chunks.zyrkel.com/api/stats",
     "method": "GET"
   },
-
   "condition": {
-    "type": "json_path",
-    "path": "$.total_chunks",
-    "match": "any"
+    "type": "extract_value",
+    "selector": "$.genome_pct",
+    "unit": "%"
   },
-
   "notify": {
     "telegram": true,
-    "email": false
+    "message": "CrowdGenome: {value}% genome coverage ({summary})"
   },
-
-  "action": {
-    "type": "commit",
-    "message": "crowdgenome: update staging data"
-  },
-
-  "output_dir": "staging",
-
-  "crowdgenome": {
-    "assembly_source": "HPRC",
-    "reference": "GRCh38",
-    "chunk_size_bp": 5000,
-    "tools": ["minimap2", "samtools", "bedtools"],
-    "milestones": {
-      "notify_at_pct": [10, 25, 50, 75, 90, 100],
-      "notify_on_dark_region": true,
-      "email_digest": "daily"
-    }
-  }
+  "output_dir": "staging"
 }

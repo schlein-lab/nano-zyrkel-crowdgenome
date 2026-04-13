@@ -1,29 +1,39 @@
-name: Orchestrate CrowdGenome
+name: "nano-zyrkel: CrowdGenome Orchestrator"
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # Every 10 minutes
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  orchestrate:
+  run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install nano-zyrkel
-        run: cargo install nano-zyrkel --locked 2>/dev/null || echo "Using pre-built binary"
-
-      - name: Run nano-zyrkel with crowdgenome plugin
-        run: nano-zyrkel run --config hats/config.json
+      - name: Get nano-zyrkel
         env:
-          DO_SPACES_ACCESS_KEY: ${{ secrets.DO_SPACES_ACCESS_KEY }}
-          DO_SPACES_SECRET_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
-
-      - name: Commit updated staging data
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          git config user.name "nano-zyrkel-bot"
-          git config user.email "bot@zyrkel.com"
+          gh release download bin-v0.2.0 -R schlein-lab/nano-zyrkel \
+            -p "nano-zyrkel-x86_64-unknown-linux-gnu.tar.gz" --clobber
+          tar xzf nano-zyrkel-x86_64-unknown-linux-gnu.tar.gz
+          chmod +x nano-zyrkel
+
+      - name: Execute
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: ./nano-zyrkel --config hats/config.json --lang en
+
+      - name: Commit
+        run: |
+          git config user.name "nano-zyrkel"
+          git config user.email "nano@zyrkel.local"
           git add staging/
-          git diff --cached --quiet || git commit -m "crowdgenome: orchestrate — update queue + results"
-          git push
+          git diff --staged --quiet || \
+            git commit -m "crowdgenome $(date -u +%Y-%m-%dT%H:%M)"
+          git push || true

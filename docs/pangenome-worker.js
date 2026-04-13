@@ -13,6 +13,25 @@
 
 import { reduced } from './reduce.js';
 
+// ── nano-zyrkel WASM core ──
+let nzConfig = null;
+let nzStats = null;
+let nzCache = null;
+try {
+  const nz = await import('./wasm/nano_zyrkel_wasm_core.js');
+  await nz.default();
+  nz.install_panic_hook();
+  const configRes = await fetch('../hats/config.json');
+  if (configRes.ok) {
+    nzConfig = nz.ConfigReader.fromValue(await configRes.json());
+    console.log(`[nano-zyrkel-wasm-core] ${nz.version()} — config: ${nzConfig.id()}`);
+  }
+  nzStats = new nz.Stats();
+  nzCache = new nz.Cache('crowdgenome');
+} catch (e) {
+  console.warn('[nano-zyrkel-wasm-core] not available, running without:', e.message);
+}
+
 const SPACES = 'https://crowdgenome.fra1.digitaloceanspaces.com';
 const REPO_RAW = 'https://raw.githubusercontent.com/schlein-lab/nano-zyrkel-crowdgenome/main';
 const API = 'https://chunks.zyrkel.com/api';

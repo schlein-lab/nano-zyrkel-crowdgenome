@@ -1,9 +1,12 @@
-name: LLM Daily Summary
+name: "nano-zyrkel: CrowdGenome Daily Summary"
 
 on:
   schedule:
     - cron: '0 21 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   summarize:
@@ -12,25 +15,29 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Generate daily summary
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          COLLECT=$(cat staging/collect.json)
-          PROMPT="You are a genomics research assistant. Summarize today's crowdgenome findings based on this data: ${COLLECT}. Be concise (2-3 sentences). Mention: chunks analyzed, dark regions found, notable chromosomes, contributor count. If data is empty, say the project is initializing."
+          STATS=$(curl -s "https://chunks.zyrkel.com/api/stats")
 
-          # Use Codex CLI or curl to Anthropic API
-          SUMMARY=$(echo "$PROMPT" | codex --print 2>/dev/null || echo "Summary generation pending — Codex CLI not available in this runner.")
+          SUMMARY=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "$(jq -n --arg s "$STATS" '{
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 300,
+              messages: [{role: "user", content: ("You are a genomics research assistant. Summarize todays CrowdGenome progress in 2-3 sentences. Mention: chunks analyzed, coverage, notable chromosomes, contributor count. Data: " + $s)}]
+            }')" | jq -r '.content[0].text // "Summary generation failed"')
 
-          # Write summary JSON
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          jq -n \
-            --arg summary "$SUMMARY" \
-            --arg timestamp "$TIMESTAMP" \
-            '{summary: $summary, timestamp: $timestamp, highlights: [], milestones_reached: [], dark_regions_today: 0, contributors_today: 0}' \
-            > staging/llm-summary.json
+          jq -n --arg s "$SUMMARY" --arg t "$TIMESTAMP" \
+            '{summary: $s, timestamp: $t}' > staging/crowdgenome/llm-summary.json
 
       - name: Commit summary
         run: |
-          git config user.name "nano-zyrkel-bot"
-          git config user.email "bot@zyrkel.com"
-          git add staging/llm-summary.json
-          git diff --cached --quiet || git commit -m "crowdgenome: daily LLM summary"
-          git push
+          git config user.name "nano-zyrkel"
+          git config user.email "nano@zyrkel.local"
+          git add staging/crowdgenome/llm-summary.json
+          git diff --staged --quiet || git commit -m "crowdgenome: daily summary $(date -u +%Y-%m-%d)"
+          git push || true
