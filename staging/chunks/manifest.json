@@ -1,8 +1,0 @@
-{
-  "version": 1,
-  "assembly": "HPRC-HG002",
-  "reference": "GRCh38",
-  "chunk_size_bp": 5000,
-  "total_chunks": 0,
-  "chunks": []
-}

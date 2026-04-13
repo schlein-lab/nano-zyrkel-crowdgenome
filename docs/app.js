@@ -4,6 +4,7 @@
 // =====================================================================
 
 const GITHUB_RAW = 'https://raw.githubusercontent.com/schlein-lab/nano-zyrkel-crowdgenome/main';
+const API = 'https://chunks.zyrkel.com/api';
 
 // Chromosome sizes (GRCh38, in Mb, approximate)
 const CHR_SIZES = {
@@ -30,17 +31,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadStats() {
   try {
-    const res = await fetch(`${GITHUB_RAW}/staging/collect.json`);
+    const res = await fetch(`${API}/stats`);
     if (res.ok) {
       const data = await res.json();
-      setText('stat-chunks', data.completed_chunks || 0);
-      setText('stat-dark', data.dark_regions_found || 0);
-      setText('stat-contributors', data.total_contributors || 0);
+      setText('stat-chunks', data.unique_chunks || 0);
+      setText('stat-dark', data.divergent_chunks || 0);
+      setText('stat-contributors', data.contributors || 0);
       setText('stat-cpu', formatHours(data.cpu_hours || 0));
-      setText('stat-coverage', `${(data.genome_coverage_pct || 0).toFixed(1)}%`);
+      setText('stat-coverage', `${(data.genome_pct || 0).toFixed(1)}%`);
 
       if (data.chromosomes) {
-        chrCompletion = data.chromosomes;
+        for (const [chr, info] of Object.entries(data.chromosomes)) {
+          const clean = chr.replace(/^chr/, '');
+          const size = {1:249,2:243,3:198,4:191,5:182,6:171,7:159,8:146,9:139,10:134,11:135,12:133,13:115,14:107,15:102,16:90,17:84,18:80,19:59,20:65,21:47,22:51,X:156,Y:57}[clean] || 100;
+          const totalChunks = size * 200;
+          chrCompletion[clean] = (parseInt(info.cnt) / totalChunks) * 100;
+        }
         updateKaryogram();
       }
     }
