@@ -322,12 +322,10 @@ function highlightChr(chrName) {
 function updateProgress(len) {
   if (len) sessionBases += len;
   const pctEl = $('[data-nano-progress-pct]');
-  const basesEl = $('[data-nano-session-bases]');
-  if (pctEl) pctEl.textContent = `${((sessionBases / GENOME_SIZE) * 100).toFixed(4)}%`;
-  if (basesEl) {
-    basesEl.textContent = sessionBases < 1e6
-      ? `${(sessionBases / 1e3).toFixed(1)}k`
-      : `${(sessionBases / 1e6).toFixed(2)}M`;
+  if (pctEl) {
+    // Community-based: each result = 5000bp analyzed against one tile
+    const communityBases = (communityCount + localSinceRefresh) * 5000;
+    pctEl.textContent = `${((communityBases / GENOME_SIZE) * 100).toFixed(3)}%`;
   }
 }
 
