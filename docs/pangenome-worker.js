@@ -604,12 +604,13 @@ async function analyzeChunk() {
     localStorage.setItem('cg-done', JSON.stringify([...doneChunks]));
   }
 
-  // ── Update counters ──
-  sessionChunks++;
-  if (isDivergent) sessionDark++;
-  localStorage.setItem('cg-chunks', sessionChunks);
-  localStorage.setItem('cg-dark', sessionDark);
-  localStorage.setItem('cg-bases', sessionBases);
+  // ── Update counters (only count if minimap2 actually ran) ──
+  if (minimap2Ran) {
+    sessionChunks++;
+    if (isDivergent) sessionDark++;
+    localStorage.setItem('cg-chunks', sessionChunks);
+    localStorage.setItem('cg-dark', sessionDark);
+  }
   const chrClean = pos.chr.replace(/^chr/, '');
   analyzedChrs[chrClean] = (analyzedChrs[chrClean] || 0) + 1;
 
