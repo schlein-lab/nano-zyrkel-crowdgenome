@@ -319,13 +319,15 @@ function highlightChr(chrName) {
   });
 }
 
-function updateProgress(len) {
-  if (len) sessionBases += len;
+function updateProgress() {
   const pctEl = $('[data-nano-progress-pct]');
   if (pctEl) {
-    // Community-based: each result = 5000bp analyzed against one tile
-    const communityBases = (communityCount + localSinceRefresh) * 5000;
-    pctEl.textContent = `${((communityBases / GENOME_SIZE) * 100).toFixed(3)}%`;
+    // Honest: each chunk needs 686 tile-alignments to be "covered".
+    // Covered chunks = total alignments / 686.
+    const coveredChunks = Math.floor(communityCount / 686);
+    const coveredBases = coveredChunks * 5000;
+    const pct = (coveredBases / GENOME_SIZE) * 100;
+    pctEl.textContent = pct < 0.001 ? `${coveredChunks} chunks resolved` : `${pct.toFixed(4)}%`;
   }
 }
 
@@ -617,7 +619,7 @@ async function analyzeChunk() {
   $('[data-nano-session-chunks]')?.replaceChildren(document.createTextNode(String(sessionChunks)));
   $('[data-nano-session-nothit]')?.replaceChildren(document.createTextNode(String(sessionDark)));
   highlightChr(pos.chr);
-  updateProgress(seq.length);
+  updateProgress();
 
   // ── Result display ──
   if (resultEl) {
@@ -646,7 +648,7 @@ async function runLoop() {
   // Restore counters from session
   $('[data-nano-session-chunks]')?.replaceChildren(document.createTextNode(String(sessionChunks)));
   $('[data-nano-session-nothit]')?.replaceChildren(document.createTextNode(String(sessionDark)));
-  updateProgress(0);
+  updateProgress();
 
   // Load community total from server
   loadCommunityCount();
