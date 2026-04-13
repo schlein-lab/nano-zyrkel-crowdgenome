@@ -5,149 +5,167 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>CrowdGenome — Mapping the Dark Genome</title>
-  <meta name="description" content="Distributed pangenome analysis. Your browser helps map the parts of human DNA missing from the reference genome.">
-  <link rel="stylesheet" href="style.css">
+  <script src="coi-serviceworker.js"></script>
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #0a0a0f;
+  --surface-1: oklch(0.185 0 0);
+  --surface-2: oklch(0.220 0 0);
+  --border: oklch(0.305 0 0);
+  --fg: oklch(0.925 0 0);
+  --fg-strong: oklch(0.985 0 0);
+  --fg-dim: oklch(0.780 0 0);
+  --fg-muted: oklch(0.620 0 0);
+  --accent: oklch(0.705 0.148 52);
+  --accent-border: oklch(0.425 0.092 52);
+  --accent-subtle: oklch(0.265 0.048 52);
+  --success: oklch(0.745 0.148 148);
+  --success-subtle: oklch(0.245 0.040 148);
+  --error: oklch(0.680 0.180 27);
+  --error-subtle: oklch(0.255 0.050 27);
+  --mono: 'SF Mono','Cascadia Code','Fira Code','Consolas',monospace;
+  --sans: system-ui,-apple-system,sans-serif;
+  --radius: 8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--fg);padding:1rem;line-height:1.5}
+a{color:var(--accent);text-decoration:none}
+
+.widget{border:1px solid var(--accent-border);border-radius:var(--radius);padding:1.25rem;background:color-mix(in oklch,var(--accent-subtle) 20%,var(--surface-1));display:flex;flex-direction:column;gap:0.9rem;min-height:480px}
+.widget--dark{border-color:var(--error);box-shadow:0 0 24px -4px oklch(0.680 0.180 27/0.3)}
+.header-row{display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap}
+.title{font-family:var(--mono);font-size:0.85rem;font-weight:600;color:var(--accent)}
+.live{font-family:var(--mono);font-size:0.6rem;font-weight:600;color:var(--success);background:var(--success-subtle);padding:0.15em 0.5em;border-radius:99px;text-transform:uppercase;letter-spacing:0.08em;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.assembly-tag{font-family:var(--mono);font-size:0.55rem;color:var(--fg-muted);margin-inline-start:auto}
+
+.genome-bar{display:flex;height:20px;border-radius:3px;overflow:hidden;background:var(--surface-2);gap:1px}
+.genome-seg{height:100%;position:relative;cursor:default;transition:opacity 0.2s}
+.genome-seg--active{box-shadow:inset 0 0 0 2px var(--fg-strong)}
+.genome-labels{display:flex;gap:1px;margin-top:2px}
+.genome-lbl{font-family:var(--mono);font-size:0.4rem;color:var(--fg-muted);text-align:center;overflow:hidden}
+.genome-marker{position:absolute;top:-4px;width:2px;height:28px;background:var(--fg-strong);pointer-events:none;transition:left 0.4s;display:none}
+
+.progress{display:flex;gap:1.5rem;flex-wrap:wrap}
+.progress-item{display:flex;flex-direction:column;align-items:center;min-width:70px}
+.progress-val{font-family:var(--mono);font-size:1.1rem;font-weight:600;color:var(--accent)}
+.progress-lbl{font-size:0.55rem;color:var(--fg-muted);text-transform:uppercase;letter-spacing:0.05em}
+
+.target{display:flex;align-items:baseline;gap:0.75rem;flex-wrap:wrap}
+.chr{font-size:1.2rem;font-weight:600;color:var(--accent)}
+.pos{color:var(--fg)}
+.chunk-id{font-size:0.7rem;color:var(--fg-muted);margin-inline-start:auto}
+
+.seq-wrap{position:relative}
+.seq{font-family:var(--mono);font-size:0.5rem;line-height:1.2;color:var(--fg-muted);background:var(--surface-2);padding:0.6rem;border-radius:4px;overflow:hidden;word-break:break-all;height:3.5em}
+.seq-fade{position:absolute;bottom:0;left:0;right:0;height:1.5em;background:linear-gradient(transparent,var(--surface-2));border-radius:0 0 4px 4px;pointer-events:none}
+.seq-label{position:absolute;bottom:0.3em;right:0.6em;font-family:var(--mono);font-size:0.55rem;color:var(--fg-muted);opacity:0.6}
+.base-A{color:oklch(0.745 0.148 148)}.base-C{color:oklch(0.790 0.100 220)}.base-G{color:oklch(0.810 0.140 85)}.base-T{color:oklch(0.680 0.180 27)}.base-N{opacity:0.4}
+
+.steps{display:flex;gap:1rem;flex-wrap:wrap}
+.step{display:flex;align-items:center;gap:0.4rem;opacity:0.4;transition:opacity 0.3s}
+.step--active{opacity:1}
+.step--done{opacity:1}
+.step-icon{font-size:0.85rem;width:1.1em;text-align:center}
+.step--active .step-icon{color:var(--accent);animation:spin 1s linear infinite}
+.step--done .step-icon{color:var(--success)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.step-name{font-family:var(--mono);font-size:0.65rem;color:var(--fg-dim)}
+.step-time{font-family:var(--mono);font-size:0.55rem;color:var(--fg-muted)}
+
+.hits{background:var(--surface-2);border-radius:4px;padding:0.6rem;font-family:var(--mono);font-size:0.6rem;height:6em;overflow-y:auto}
+.hits-header{display:flex;justify-content:space-between;color:var(--fg-muted);font-size:0.55rem;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem}
+[data-status="ready"]{color:var(--success)}
+[data-status="error"]{color:var(--error)}
+.hit{display:grid;grid-template-columns:3ch 3ch 8ch 1fr 7ch;gap:0.4rem;padding:0.15em 0.3em;border-radius:2px;background:var(--surface-1);color:var(--fg-dim);font-size:0.55rem;margin-bottom:1px}
+.hit:first-of-type{background:color-mix(in oklch,var(--accent-subtle) 50%,var(--surface-1));color:var(--fg)}
+.hit-idx{color:var(--accent);font-weight:600}
+.hit-mapq--high{color:var(--success)}.hit-mapq--mid{color:oklch(0.810 0.140 85)}.hit-mapq--low{color:var(--error)}
+.no-hits{color:var(--fg-muted);font-style:italic;padding:0.3em}
+
+.result{font-size:0.8rem;padding:0.6rem;border-radius:4px;background:var(--surface-2);height:2.5em;display:flex;align-items:center;overflow:hidden}
+.result--mapped{background:var(--success-subtle);color:var(--success)}
+.result--dark{background:var(--error-subtle);color:var(--error);font-weight:600}
+
+.stats{display:flex;gap:1.5rem;flex-wrap:wrap;font-family:var(--mono);font-size:0.65rem;color:var(--fg-muted)}
+.stats strong{color:var(--fg);font-weight:600}
+
+.footer{display:flex;justify-content:space-between;align-items:center;font-size:0.6rem;color:var(--fg-muted);padding-top:0.6rem;border-top:1px solid var(--border);flex-wrap:wrap;gap:0.4rem}
+.footer strong{color:var(--fg)}
+.footer a{color:var(--accent)}
+  </style>
 </head>
 <body>
-  <header class="header">
-    <h1>CrowdGenome</h1>
-    <p class="header__sub">Mapping the Dark Genome — powered by <a href="https://zyrkel.com">Zyrkel</a></p>
-  </header>
+  <div class="widget" id="widget" data-nano="compute">
+    <div class="header-row">
+      <span class="title">nano-zyrkel-crowdgenome</span>
+      <span class="live">live</span>
+      <span class="assembly-tag">HPRC HG002 &middot; 3.05 Gb &middot; 23 chromosomes &middot; 610,315 chunks</span>
+    </div>
 
-  <main>
-    <!-- Stats Bar -->
-    <section class="stats-bar" id="stats">
-      <div class="stat">
-        <span class="stat__value" id="stat-chunks">--</span>
-        <span class="stat__label">chunks analyzed</span>
-      </div>
-      <div class="stat">
-        <span class="stat__value" id="stat-dark">--</span>
-        <span class="stat__label">dark regions found</span>
-      </div>
-      <div class="stat">
-        <span class="stat__value" id="stat-contributors">--</span>
-        <span class="stat__label">contributors</span>
-      </div>
-      <div class="stat">
-        <span class="stat__value" id="stat-cpu">--</span>
-        <span class="stat__label">CPU hours donated</span>
-      </div>
-      <div class="stat">
-        <span class="stat__value" id="stat-coverage">--%</span>
-        <span class="stat__label">genome covered</span>
-      </div>
-    </section>
+    <div style="position:relative">
+      <div class="genome-bar" id="nano-genome-bar"></div>
+      <div class="genome-marker" id="nano-genome-marker"></div>
+      <div class="genome-labels" id="nano-genome-labels"></div>
+    </div>
 
-    <!-- Karyogram — all chromosomes at a glance -->
-    <section class="panel" id="karyogram-panel">
-      <h2>Karyogram</h2>
-      <p class="panel__desc">Each chromosome colored by analysis completion. Click to zoom in.</p>
-      <div class="karyogram" id="karyogram">
-        <!-- 22 autosomes + X + Y, rendered by JS -->
-      </div>
-    </section>
+    <div class="progress">
+      <div class="progress-item"><span class="progress-val" data-nano-community-chunks>--</span><span class="progress-lbl">community alignments</span></div>
+      <div class="progress-item"><span class="progress-val" data-nano-progress-pct>--%</span><span class="progress-lbl">of genome covered</span></div>
+      <div class="progress-item"><span class="progress-val" data-nano-session-chunks>0</span><span class="progress-lbl">your session</span></div>
+      <div class="progress-item"><span class="progress-val" data-nano-session-dark>0</span><span class="progress-lbl">unmapped</span></div>
+    </div>
 
-    <!-- Contig Track — zoom into one chromosome -->
-    <section class="panel" id="contig-panel" hidden>
-      <div class="panel__header">
-        <button class="btn-back" id="btn-back-karyo">&larr; All chromosomes</button>
-        <h2 id="contig-title">chr1</h2>
-      </div>
-      <p class="panel__desc">Contigs mapped to this chromosome. Green = mapped, red = dark region, gray = pending.</p>
-      <div class="contig-track" id="contig-track">
-        <!-- Rendered by JS: linear track with colored blocks -->
-      </div>
-      <div class="contig-legend">
-        <span class="legend-item"><span class="legend-swatch" style="background: var(--color-mapped)"></span> Mapped</span>
-        <span class="legend-item"><span class="legend-swatch" style="background: var(--color-dark)"></span> Dark region</span>
-        <span class="legend-item"><span class="legend-swatch" style="background: var(--color-pending)"></span> Pending</span>
-      </div>
-    </section>
+    <div class="target">
+      <span class="chr" data-nano-chr>--</span>
+      <span class="pos" data-nano-chunk-pos>waiting&hellip;</span>
+      <span class="chunk-id" data-nano-chunk-id>#--</span>
+    </div>
 
-    <!-- Alignment Detail — click a contig -->
-    <section class="panel" id="alignment-panel" hidden>
-      <div class="panel__header">
-        <button class="btn-back" id="btn-back-contig">&larr; Chromosome view</button>
-        <h2 id="alignment-title">Chunk #--</h2>
-      </div>
-      <div class="alignment-detail" id="alignment-detail">
-        <div class="alignment-meta" id="alignment-meta">
-          <!-- Position, mapping %, mismatches, insertions, deletions -->
-        </div>
-        <div class="alignment-viz" id="alignment-viz">
-          <!-- Linear alignment visualization: reference vs query -->
-        </div>
-        <div class="alignment-dark" id="alignment-dark">
-          <!-- Dark region highlights -->
-        </div>
-      </div>
-    </section>
+    <div class="seq-wrap">
+      <div class="seq" data-nano-seq-preview></div>
+      <div class="seq-fade"></div>
+      <span class="seq-label" data-nano-seq-label>5,000 bp</span>
+    </div>
 
-    <!-- Live Feed -->
-    <section class="panel" id="feed-panel">
-      <h2>Live Feed</h2>
-      <p class="panel__desc">Real-time mappings from contributors worldwide.</p>
-      <div class="live-feed" id="live-feed">
-        <div class="feed-item feed-item--placeholder">Waiting for first analysis...</div>
-      </div>
-    </section>
+    <div class="steps">
+      <div class="step" data-step="fetch"><span class="step-icon" data-step-icon="fetch">&#x25CB;</span><span class="step-name">fetch</span><span class="step-time" data-step-time="fetch"></span></div>
+      <div class="step" data-step="parse"><span class="step-icon" data-step-icon="parse">&#x25CB;</span><span class="step-name">parse</span><span class="step-time" data-step-time="parse"></span></div>
+      <div class="step" data-step="minimap2"><span class="step-icon" data-step-icon="minimap2">&#x25CB;</span><span class="step-name">minimap2</span><span class="step-time" data-step-time="minimap2"></span></div>
+      <div class="step" data-step="analyze"><span class="step-icon" data-step-icon="analyze">&#x25CB;</span><span class="step-name">k-mer</span><span class="step-time" data-step-time="analyze"></span></div>
+      <div class="step" data-step="submit"><span class="step-icon" data-step-icon="submit">&#x25CB;</span><span class="step-name">submit</span><span class="step-time" data-step-time="submit"></span></div>
+    </div>
 
-    <!-- Pipeline Status -->
-    <section class="panel" id="pipeline-panel">
-      <h2>Your Browser</h2>
-      <p class="panel__desc">Running minimap2 &rarr; samtools &rarr; bedtools on a pangenome chunk.</p>
-      <div class="pipeline" id="pipeline">
-        <div class="pipeline__step" data-step="minimap2">
-          <span class="pipeline__tool">minimap2</span>
-          <span class="pipeline__desc">Aligning against GRCh38</span>
-          <progress value="0" max="100"></progress>
-        </div>
-        <div class="pipeline__step" data-step="samtools">
-          <span class="pipeline__tool">samtools</span>
-          <span class="pipeline__desc">Processing alignment</span>
-          <progress value="0" max="100"></progress>
-        </div>
-        <div class="pipeline__step" data-step="bedtools">
-          <span class="pipeline__tool">bedtools</span>
-          <span class="pipeline__desc">Finding dark regions</span>
-          <progress value="0" max="100"></progress>
-        </div>
-      </div>
-      <div class="pipeline__result" id="pipeline-result">Initializing...</div>
-    </section>
+    <div class="hits" id="nano-hits" hidden>
+      <div class="hits-header"><span>minimap2 alignments</span><span data-nano-minimap2-status data-status="loading">loading&hellip;</span></div>
+      <div data-nano-hits-list></div>
+    </div>
 
-    <!-- LLM Daily Summary -->
-    <section class="panel" id="summary-panel">
-      <h2>Daily Summary</h2>
-      <p class="panel__desc">LLM-generated analysis of today's findings.</p>
-      <blockquote class="summary" id="daily-summary">Loading...</blockquote>
-      <time class="summary__time" id="summary-time"></time>
-    </section>
+    <div class="result" data-nano-findings>Connecting&hellip;</div>
 
-    <!-- Email Signup -->
-    <section class="panel" id="email-panel">
-      <h2>Get notified</h2>
-      <p class="panel__desc">Receive email alerts when milestones are reached or dark regions are discovered.</p>
-      <form class="email-form" id="email-form">
-        <input type="email" placeholder="your@email.com" required>
-        <button type="submit">Subscribe</button>
-      </form>
-      <p class="email-note">Milestones: 10%, 25%, 50%, 75%, 100% genome coverage. Dark region alerts for clinically relevant loci.</p>
-    </section>
-  </main>
+    <div class="stats">
+      <span>GC <strong data-nano-gc>--</strong></span>
+      <span>entropy <strong data-nano-entropy>--</strong></span>
+      <span>repeats <strong data-nano-repeats>--</strong></span>
+      <span>length <strong data-nano-length>--</strong></span>
+    </div>
 
-  <footer class="footer">
-    <p>
-      <a href="https://github.com/schlein-lab/nano-zyrkel-crowdgenome">Source</a> &middot;
-      <a href="https://zyrkel.com">Zyrkel</a> &middot;
-      <a href="https://github.com/schlein-lab/nano-zyrkel">nano-zyrkel SDK</a> &middot;
-      <a href="https://humanpangenome.org">HPRC</a> &middot;
-      <a href="https://biowasm.com">biowasm</a>
-    </p>
-    <p>Data: HPRC (public domain). Tools: minimap2, samtools, bedtools (MIT). Framework: nano-zyrkel (MIT).</p>
-  </footer>
+    <div class="footer">
+      <span data-nano-submit-debug></span>
+      <a href="https://github.com/schlein-lab/nano-zyrkel-crowdgenome">source</a>
+    </div>
+  </div>
 
-  <script type="module" src="app.js"></script>
+  <script type="module">
+    import { init } from './pangenome-worker.js';
+    // Auto-start (no intersection observer needed — we ARE the page)
+    document.getElementById('widget').dataset.section = 'nanos';
+    const section = document.createElement('div');
+    section.id = 'nanos';
+    document.body.prepend(section);
+    section.style.display = 'none';
+    init();
+  </script>
 </body>
 </html>
