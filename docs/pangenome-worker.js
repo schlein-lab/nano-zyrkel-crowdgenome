@@ -284,7 +284,7 @@ function renderGenomeBar() {
     seg.dataset.chr = chr.name;
     seg.title = `chr${chr.name}: ${(chr.size / 1e6).toFixed(0)} Mb`;
     bar.appendChild(seg);
-    if (labels && pct > 2.5) {
+    if (labels && pct > 1.2) {
       const lbl = document.createElement('span');
       lbl.className = 'nano-genome__lbl';
       lbl.style.flex = `${pct}`;
