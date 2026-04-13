@@ -604,10 +604,10 @@ async function analyzeChunk() {
     localStorage.setItem('cg-done', JSON.stringify([...doneChunks]));
   }
 
-  // ── Update counters (only count if minimap2 actually ran) ──
+  // ── Update counters (only count verified minimap2 results) ──
   if (minimap2Ran) {
     sessionChunks++;
-    if (isDivergent) sessionDark++;
+    if (!hasHits) sessionDark++; // "not mapped yet" — no hit on THIS tile
     localStorage.setItem('cg-chunks', sessionChunks);
     localStorage.setItem('cg-dark', sessionDark);
   }
@@ -615,7 +615,7 @@ async function analyzeChunk() {
   analyzedChrs[chrClean] = (analyzedChrs[chrClean] || 0) + 1;
 
   $('[data-nano-session-chunks]')?.replaceChildren(document.createTextNode(String(sessionChunks)));
-  $('[data-nano-session-dark]')?.replaceChildren(document.createTextNode(String(sessionDark)));
+  $('[data-nano-session-nothit]')?.replaceChildren(document.createTextNode(String(sessionDark)));
   highlightChr(pos.chr);
   updateProgress(seq.length);
 
@@ -645,7 +645,7 @@ async function runLoop() {
 
   // Restore counters from session
   $('[data-nano-session-chunks]')?.replaceChildren(document.createTextNode(String(sessionChunks)));
-  $('[data-nano-session-dark]')?.replaceChildren(document.createTextNode(String(sessionDark)));
+  $('[data-nano-session-nothit]')?.replaceChildren(document.createTextNode(String(sessionDark)));
   updateProgress(0);
 
   // Load community total from server
