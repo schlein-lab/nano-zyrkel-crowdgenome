@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>CrowdGenome — Mapping the Dark Genome</title>
+  <title>CrowdGenome — Distributed Pangenome Analysis</title>
   <script>
   // Kill any previously registered service worker (coi-serviceworker broke cross-origin)
   navigator.serviceWorker?.getRegistrations().then(regs => {
@@ -117,9 +117,9 @@ a{color:var(--accent);text-decoration:none}
 
     <div class="progress">
       <div class="progress-item"><span class="progress-val" data-nano-community-chunks>--</span><span class="progress-lbl">community alignments</span></div>
-      <div class="progress-item"><span class="progress-val" data-nano-progress-pct>--%</span><span class="progress-lbl">of genome covered</span></div>
+      <div class="progress-item"><span class="progress-val" data-nano-progress-pct>--%</span><span class="progress-lbl">of alignments done</span></div>
       <div class="progress-item"><span class="progress-val" data-nano-session-chunks>0</span><span class="progress-lbl">your session</span></div>
-      <div class="progress-item"><span class="progress-val" data-nano-session-dark>0</span><span class="progress-lbl">unmapped</span></div>
+      <div class="progress-item"><span class="progress-val" data-nano-session-nothit>0</span><span class="progress-lbl">not mapped yet</span></div>
     </div>
 
     <div class="target">
