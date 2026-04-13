@@ -622,6 +622,14 @@ async function runLoop() {
   // Start minimap2 in background
   initAioli();
 
+  // Flush remaining batch on page unload
+  window.addEventListener('beforeunload', () => {
+    if (resultBatch.length > 0) {
+      navigator.sendBeacon(`${API}/result`, new Blob([JSON.stringify(resultBatch)], { type: 'text/plain' }));
+      resultBatch = [];
+    }
+  });
+
   // Continuous loop — runs even when tab is in background
   async function loop() {
     await analyzeChunk();
