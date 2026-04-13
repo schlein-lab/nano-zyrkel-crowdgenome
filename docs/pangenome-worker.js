@@ -407,12 +407,22 @@ async function loadQueue() {
       currentTile = { ...queueInfo.tile, text: await tileRes.text() };
     }
 
-    // Build chunk queue: random order, skip already-done chunks
-    const start = queueInfo.batch.start;
-    const end = queueInfo.batch.end;
-    const ids = [];
-    for (let i = start; i < end && i < TOTAL_CHUNKS; i++) {
-      if (!doneChunks.has(i)) ids.push(i);
+    // Build chunk queue: skip already-done chunks
+    // If batch is exhausted, auto-advance to next 10k block
+    let start = queueInfo.batch.start;
+    let end = queueInfo.batch.end;
+
+    // Check if we've done everything in this batch — advance locally
+    let ids = [];
+    while (ids.length === 0 && start < TOTAL_CHUNKS) {
+      for (let i = start; i < end && i < TOTAL_CHUNKS; i++) {
+        if (!doneChunks.has(i)) ids.push(i);
+      }
+      if (ids.length === 0) {
+        // This batch is done, try next 10k
+        start = end;
+        end = Math.min(start + 10000, TOTAL_CHUNKS);
+      }
     }
 
     // Shuffle (Fisher-Yates)
