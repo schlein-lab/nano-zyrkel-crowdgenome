@@ -334,31 +334,28 @@ let localSinceRefresh = 0;
 let lastCommunityRefresh = 0;
 
 async function loadCommunityCount() {
+  const el = $('[data-nano-community-chunks]');
   try {
     const res = await fetch(`${API}/results/count?t=${Date.now()}`);
-    if (res.ok) {
-      const { count } = await res.json();
-      communityCount = count;
-      localSinceRefresh = 0;
-      localStorage.setItem('cg-community', count);
-    }
-  } catch {
-    // Fallback: use last known value from localStorage
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    communityCount = data.count || 0;
+    localSinceRefresh = 0;
+    localStorage.setItem('cg-community', communityCount);
+    if (el) el.textContent = communityCount.toLocaleString();
+  } catch (e) {
+    // API failed — show cached value, never show 0
     const cached = parseInt(localStorage.getItem('cg-community') || '0');
     if (cached > communityCount) communityCount = cached;
+    if (el) el.textContent = communityCount > 0 ? communityCount.toLocaleString() : `err: ${e.message}`;
+    console.error('[crowdgenome] loadCommunityCount failed:', e);
   }
-  const el = $('[data-nano-community-chunks]');
-  if (el) el.textContent = (communityCount + localSinceRefresh).toLocaleString();
   lastCommunityRefresh = Date.now();
 }
 
 function updateCommunityCount() {
-  // Optimistic increment between server polls
-  localSinceRefresh++;
-  const el = $('[data-nano-community-chunks]');
-  if (el) el.textContent = (communityCount + localSinceRefresh).toLocaleString();
-
-  // Re-sync from server every 15 seconds
+  // DON'T increment locally — only show server truth
+  // Just trigger a refresh if enough time passed
   if (Date.now() - lastCommunityRefresh > 15000) {
     loadCommunityCount();
   }
