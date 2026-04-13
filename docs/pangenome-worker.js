@@ -340,10 +340,15 @@ async function loadCommunityCount() {
       const { count } = await res.json();
       communityCount = count;
       localSinceRefresh = 0;
-      const el = $('[data-nano-community-chunks]');
-      if (el) el.textContent = count.toLocaleString();
+      localStorage.setItem('cg-community', count);
     }
-  } catch {}
+  } catch {
+    // Fallback: use last known value from localStorage
+    const cached = parseInt(localStorage.getItem('cg-community') || '0');
+    if (cached > communityCount) communityCount = cached;
+  }
+  const el = $('[data-nano-community-chunks]');
+  if (el) el.textContent = (communityCount + localSinceRefresh).toLocaleString();
   lastCommunityRefresh = Date.now();
 }
 

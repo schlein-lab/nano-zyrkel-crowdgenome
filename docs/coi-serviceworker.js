@@ -9,8 +9,11 @@ if (typeof window === 'undefined') {
   self.addEventListener('fetch', (e) => {
     if (e.request.cache === 'only-if-cached' && e.request.mode !== 'same-origin') return;
 
-    // Don't intercept POST requests (submit to briefkasten) — let them pass through
+    // Don't intercept non-same-origin requests — let them pass through
+    // This avoids COEP blocking cross-origin API calls and chunk fetches
     if (e.request.method !== 'GET' && e.request.method !== 'HEAD') return;
+    const url = new URL(e.request.url);
+    if (url.origin !== self.location.origin) return;
 
     e.respondWith(
       fetch(e.request).then((r) => {
