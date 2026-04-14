@@ -1,0 +1,13 @@
+{
+  "items_completed": 0,
+  "items_total": 686,
+  "progress": 39646,
+  "progress_pct": 15.47,
+  "progress_total": 256271,
+  "tile": {
+    "chr": "chr1",
+    "index": 0,
+    "key": "chr1:0-5000000",
+    "url": "https://crowdgenome.fra1.digitaloceanspaces.com/ref/chr1/tile_0000.fa"
+  }
+}
