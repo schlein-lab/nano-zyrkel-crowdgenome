@@ -445,15 +445,29 @@ async function loadQueue() {
   if (posEl) posEl.textContent = 'reading queue from nano-zyrkel\u2026';
 
   try {
-    const res = await fetch(`${REPO_RAW}/staging/queue/active.json`);
-    if (!res.ok) throw new Error(`queue ${res.status}`);
-    queueInfo = await res.json();
+    // Read active tile from Binary-written staging file (GitHub Raw)
+    // Falls back to PHP API if staging file not yet written
+    let active = null;
+    try {
+      const stRes = await fetch(`${REPO_RAW}/staging/crowdgenome/active.json?t=${Math.floor(Date.now()/60000)}`);
+      if (stRes.ok) active = await stRes.json();
+    } catch {}
+    if (!active || !active.tile) {
+      const apiRes = await fetch(`${API}/stats`);
+      if (apiRes.ok) {
+        // Minimal fallback: construct active from stats
+        active = { tile: { chr: 'chr1', index: 0, key: 'chr1:0-5000000',
+          url: 'https://crowdgenome.fra1.digitaloceanspaces.com/ref/chr1/tile_0000.fa' } };
+      }
+    }
+    if (!active || !active.tile) throw new Error('no active tile available');
+    queueInfo = active;
 
-    if (!currentTile || currentTile.key !== queueInfo.tile.key) {
-      if (posEl) posEl.textContent = `loading GRCh38 ${queueInfo.tile.chr} tile ${queueInfo.tile.index} (~5MB)\u2026`;
-      const tileRes = await fetch(queueInfo.tile.url);
+    if (!currentTile || currentTile.key !== active.tile.key) {
+      if (posEl) posEl.textContent = `loading GRCh38 ${active.tile.chr} tile ${active.tile.index} (~5MB)\u2026`;
+      const tileRes = await fetch(active.tile.url);
       if (!tileRes.ok) throw new Error(`tile ${tileRes.status}`);
-      currentTile = { ...queueInfo.tile, text: await tileRes.text() };
+      currentTile = { ...active.tile, text: await tileRes.text() };
     }
 
     let start = currentBlockStart;
@@ -494,7 +508,7 @@ async function loadQueue() {
       localStorage.setItem('cg-done', JSON.stringify([...doneChunks]));
     }
 
-    if (posEl) posEl.textContent = `${queueInfo.tile.chr} tile ${queueInfo.tile.index} \u2014 ${chunkQueue.length} chunks queued`;
+    if (posEl) posEl.textContent = `${currentTile.chr} tile ${currentTile.index} \u2014 ${chunkQueue.length} chunks queued`;
     return true;
   } catch (e) {
     const r = $('[data-nano-findings]');

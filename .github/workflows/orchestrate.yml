@@ -1,4 +1,4 @@
-name: "nano-zyrkel: CrowdGenome Orchestrator"
+name: "nano-zyrkel: CrowdGenome Pipeline"
 
 on:
   schedule:
@@ -18,15 +18,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          gh release download bin-v0.2.0 -R schlein-lab/nano-zyrkel \
+          gh release download bin-v0.3.0 -R schlein-lab/nano-zyrkel \
             -p "nano-zyrkel-x86_64-unknown-linux-gnu.tar.gz" --clobber
           tar xzf nano-zyrkel-x86_64-unknown-linux-gnu.tar.gz
           chmod +x nano-zyrkel
 
-      - name: Execute
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Execute pipeline
         run: ./nano-zyrkel --config hats/config.json --lang en
 
       - name: Commit

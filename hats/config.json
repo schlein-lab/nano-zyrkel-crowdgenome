@@ -1,20 +1,19 @@
 {
   "id": "crowdgenome",
   "description": "Distributed Dark Genome mapping — crowd-sourced pangenome alignment via browser WASM",
-  "type": "tracker",
+  "type": "pipeline",
   "lang": "en",
-  "source": {
-    "url": "https://chunks.zyrkel.com/api/stats",
-    "method": "GET"
-  },
-  "condition": {
-    "type": "extract_value",
-    "selector": "$.genome_pct",
-    "unit": "%"
-  },
-  "notify": {
-    "telegram": true,
-    "message": "CrowdGenome: {value}% genome coverage ({summary})"
-  },
-  "output_dir": "staging"
+  "notify": { "telegram": false },
+  "output_dir": "staging",
+  "pipeline": {
+    "manifest_url": "https://crowdgenome.fra1.digitaloceanspaces.com/ref/manifest.json",
+    "manifest_items_path": "$.chromosomes.*.tile_list[*]",
+    "progress_url": "https://chunks.zyrkel.com/api/stats",
+    "progress_done_path": "$.unique_chunks",
+    "progress_total": 256271,
+    "advance_threshold": 0.8,
+    "item_key_template": "{_parent}:{start}-{end}",
+    "item_url_template": "https://crowdgenome.fra1.digitaloceanspaces.com/{file}",
+    "milestones": [10, 25, 50, 75, 90, 100]
+  }
 }
