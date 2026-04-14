@@ -16,7 +16,7 @@ jobs:
 
       - name: Get nano-zyrkel
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh release download bin-v0.3.0 -R schlein-lab/nano-zyrkel \
             -p "nano-zyrkel-x86_64-unknown-linux-gnu.tar.gz" --clobber
