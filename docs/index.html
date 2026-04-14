@@ -48,8 +48,8 @@ a{color:var(--accent);text-decoration:none}
 .genome-bar{display:flex;height:20px;border-radius:3px;overflow:hidden;background:var(--surface-2);gap:1px}
 .genome-seg{height:100%;position:relative;cursor:default;transition:opacity 0.2s}
 .genome-seg--active{box-shadow:inset 0 0 0 2px var(--fg-strong)}
-.genome-labels{display:flex;gap:1px;margin-top:2px}
-.genome-lbl{font-family:var(--mono);font-size:0.4rem;color:var(--fg-muted);text-align:center;overflow:hidden}
+.genome-labels{display:flex;gap:1px;margin-top:2px;overflow:hidden}
+.genome-lbl{font-family:var(--mono);font-size:0.4rem;color:var(--fg-muted);text-align:center;overflow:hidden;min-width:0;white-space:nowrap}
 .genome-marker{position:absolute;top:-4px;width:2px;height:28px;background:var(--fg-strong);pointer-events:none;transition:left 0.4s;display:none}
 
 .progress{display:flex;gap:1.5rem;flex-wrap:wrap}
@@ -99,6 +99,14 @@ a{color:var(--accent);text-decoration:none}
 .footer{display:flex;justify-content:space-between;align-items:center;font-size:0.6rem;color:var(--fg-muted);padding-top:0.6rem;border-top:1px solid var(--border);flex-wrap:wrap;gap:0.4rem}
 .footer strong{color:var(--fg)}
 .footer a{color:var(--accent)}
+@media(max-width:480px){
+  .genome-labels{display:none}
+  .assembly-tag{display:none}
+  .progress{gap:0.75rem}
+  .progress-item{min-width:55px}
+  .stats{gap:0.75rem}
+  .widget{padding:0.75rem;gap:0.6rem}
+}
   </style>
 </head>
 <body>

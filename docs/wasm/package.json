@@ -4,8 +4,8 @@
   "collaborators": [
     "Christian Schlein"
   ],
-  "description": "nano-zyrkel WASM core — generic data + visualization building blocks for browser-side nano-zyrkel apps",
-  "version": "0.1.0",
+  "description": "Browser-side core for the nano-zyrkel SDK: data loaders, charting primitives, UI components and i18n compiled to WebAssembly.",
+  "version": "0.2.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -17,8 +17,16 @@
     "nano_zyrkel_wasm_core.d.ts"
   ],
   "main": "nano_zyrkel_wasm_core.js",
+  "homepage": "https://schlein-lab.github.io/nano-zyrkel/",
   "types": "nano_zyrkel_wasm_core.d.ts",
   "sideEffects": [
     "./snippets/*"
+  ],
+  "keywords": [
+    "wasm",
+    "webassembly",
+    "charts",
+    "dataviz",
+    "sdk"
   ]
 }

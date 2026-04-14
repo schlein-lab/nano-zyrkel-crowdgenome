@@ -3,34 +3,48 @@
 // ---------------------------------------------------------------------
 // 1. Read queue from nano-zyrkel repo (GitHub Raw: staging/queue/active.json)
 // 2. Load ONE GRCh38 tile (5MB, cached), then rattle through chunks
-// 3. Each chunk: fetch 5KB → minimap2 (biowasm) → submit to briefkasten
-// 4. nano-zyrkel-crowdgenome orchestrates: checks results, advances queue
+// 3. Each chunk: fetch 5KB → minimap2 (via ToolRegistry) → submit to API
+// 4. nano-zyrkel binary orchestrates: checks results, advances queue
 //
-// Anti-duplicate: large batches (10k chunks) + random start position
-// per browser session → minimal collision between concurrent users.
-// Server rejects duplicates via file_exists() check.
+// Tool execution is routed through nano-zyrkel-wasm-core ToolRegistry
+// which wraps biowasm/Aioli for lazy-loading and unified exec/pipe.
 // =====================================================================
 
 import { reduced } from './reduce.js';
 
-// ── nano-zyrkel WASM core ──
+// ── nano-zyrkel WASM core (loaded async, non-blocking) ──
 let nzConfig = null;
-let nzStats = null;
+let nzTools = null;   // ToolRegistry — routes minimap2, samtools etc.
 let nzCache = null;
-try {
-  const nz = await import('./wasm/nano_zyrkel_wasm_core.js');
-  await nz.default();
-  nz.install_panic_hook();
-  const configRes = await fetch('../hats/config.json');
-  if (configRes.ok) {
-    nzConfig = nz.ConfigReader.fromValue(await configRes.json());
-    console.log(`[nano-zyrkel-wasm-core] ${nz.version()} — config: ${nzConfig.id()}`);
+
+async function initWasmCore() {
+  try {
+    const nz = await import('./wasm/nano_zyrkel_wasm_core.js');
+    await nz.default();
+    nz.install_panic_hook();
+
+    // Read config from repo (GitHub Pages serves docs/ as root)
+    const configUrl = 'https://raw.githubusercontent.com/schlein-lab/nano-zyrkel-crowdgenome/main/hats/config.json';
+    const configRes = await fetch(configUrl);
+    if (configRes.ok) {
+      nzConfig = nz.ConfigReader.fromValue(await configRes.json());
+    }
+
+    nzCache = new nz.Cache('crowdgenome');
+
+    // ToolRegistry — register tools for lazy loading
+    if (nz.ToolRegistry) {
+      nzTools = new nz.ToolRegistry();
+      nzTools.register('minimap2', '2.22', 'biowasm');
+      // Future: nzTools.register('samtools', '1.17', 'biowasm');
+    }
+
+    console.log(`[wasm-core] ${nz.version()} — tools: ${nzTools ? 'ToolRegistry' : 'fallback'}`);
+  } catch (e) {
+    console.warn('[wasm-core] not available, running in fallback mode:', e.message);
   }
-  nzStats = new nz.Stats();
-  nzCache = new nz.Cache('crowdgenome');
-} catch (e) {
-  console.warn('[nano-zyrkel-wasm-core] not available, running without:', e.message);
 }
+initWasmCore();
 
 const SPACES = 'https://crowdgenome.fra1.digitaloceanspaces.com';
 const REPO_RAW = 'https://raw.githubusercontent.com/schlein-lab/nano-zyrkel-crowdgenome/main';
@@ -61,8 +75,8 @@ let sessionBases = parseInt(localStorage.getItem('cg-bases') || '0');
 let running = false;
 let analyzedChrs = {};
 
-let aioli = null;
-let aioliReady = false;
+let toolsReady = false;       // true once minimap2 WASM is loaded
+let aioliFallback = null;     // direct Aioli instance (fallback if no ToolRegistry)
 
 let currentTile = null;     // { key, chr, index, text }
 let chunkQueue = [];         // chunk IDs to process
@@ -70,7 +84,6 @@ let queueInfo = null;        // from active.json
 let prefetchCache = new Map(); // chunk_id → fasta text (prefetched)
 let doneChunks = new Set(JSON.parse(localStorage.getItem('cg-done') || '[]'));
 let resultBatch = [];
-// Track which 10k blocks are fully done (survives reload, compact)
 let doneBlocks = new Set(JSON.parse(localStorage.getItem('cg-done-blocks') || '[]'));
 let currentBlockStart = parseInt(localStorage.getItem('cg-block-start') || '0');
 
@@ -103,24 +116,18 @@ function resetSteps() {
   STEPS.forEach((s) => { setStep(s, null); setStepTime(s, -1); });
 }
 
-// ---- Sequence preview (lightweight: update every 5th chunk) ----
+// ---- Sequence preview ----
 let seqRenderCounter = 0;
 
 function renderSeqPreview(seq) {
   seqRenderCounter++;
   const el = $('[data-nano-seq-preview]');
   if (!el) return;
-
-  // Only re-render DOM every 10 chunks to reduce flicker
   if (seqRenderCounter % 10 !== 1 && el.textContent.length > 0) {
-    // Just update the label
     const label = $('[data-nano-seq-label]');
     if (label) label.textContent = `${seq.length.toLocaleString()} bp`;
     return;
   }
-
-  // Use textContent with CSS coloring via background-image gradient trick
-  // Much cheaper than 600 <span> elements
   el.textContent = seq.slice(0, 400);
   const label = $('[data-nano-seq-label]');
   if (label) label.textContent = `showing 400 of ${seq.length.toLocaleString()} bp`;
@@ -176,12 +183,28 @@ function detectRepeats(seq) {
   return { count, bases };
 }
 
-// ---- biowasm / Aioli ----
-async function initAioli() {
+// ---- Tool init (ToolRegistry or Aioli fallback) ----
+async function initTools() {
   const statusEl = $('[data-nano-minimap2-status]');
   const setStatus = (msg, s) => { if (statusEl) { statusEl.textContent = msg; statusEl.dataset.status = s; } };
 
   try {
+    // Path A: ToolRegistry available — load minimap2 through it
+    if (nzTools) {
+      setStatus('loading minimap2 via ToolRegistry\u2026', 'loading');
+      // Aioli script must be on the page for ToolRegistry to find window.Aioli
+      const script = document.createElement('script');
+      script.src = 'https://biowasm.com/cdn/v3/aioli.js';
+      document.head.appendChild(script);
+      await new Promise((ok, fail) => { script.onload = ok; script.onerror = () => fail('CDN'); setTimeout(fail, 15000); });
+
+      await nzTools.ensureLoaded('minimap2');
+      toolsReady = true;
+      setStatus('minimap2 ready (ToolRegistry)', 'ready');
+      return true;
+    }
+
+    // Path B: Fallback — load Aioli directly (wasm-core not available)
     setStatus('loading Aioli\u2026', 'loading');
     const script = document.createElement('script');
     script.src = 'https://biowasm.com/cdn/v3/aioli.js';
@@ -191,41 +214,52 @@ async function initAioli() {
     if (typeof window.Aioli === 'undefined') { setStatus('Aioli not found', 'error'); return false; }
 
     setStatus('loading minimap2 WASM\u2026', 'loading');
-    aioli = await new window.Aioli([{ tool: 'minimap2', version: '2.22' }], { printInterleaved: false });
-    aioliReady = true;
+    aioliFallback = await new window.Aioli([{ tool: 'minimap2', version: '2.22' }], { printInterleaved: false });
+    toolsReady = true;
     setStatus('minimap2 ready', 'ready');
     return true;
   } catch (e) {
-    aioliReady = false;
+    toolsReady = false;
     setStatus(typeof SharedArrayBuffer === 'undefined' ? 'needs COOP/COEP' : `failed: ${String(e).slice(0, 40)}`, 'error');
     return false;
   }
 }
 
 // ---- minimap2 ----
-let tileIndexed = null; // tile key for which we've built the .mmi index
+let tileIndexed = null;
 
 async function ensureTileIndex(tileText, tileKey) {
-  // Only re-index if tile changed
   if (tileIndexed === tileKey) return;
-  await aioli.mount([{ name: 'ref.fa', data: tileText }]);
-  // Build index once (takes ~300-500ms, but only once per tile)
-  await aioli.exec('minimap2 -d ref.mmi ref.fa');
+
+  if (nzTools && nzTools.isLoaded('minimap2')) {
+    // ToolRegistry path: mount + index via exec
+    await nzTools.exec('minimap2', ['-d', 'ref.mmi', 'ref.fa'], { 'ref.fa': tileText });
+  } else if (aioliFallback) {
+    await aioliFallback.mount([{ name: 'ref.fa', data: tileText }]);
+    await aioliFallback.exec('minimap2 -d ref.mmi ref.fa');
+  }
   tileIndexed = tileKey;
 }
 
 async function runMinimap2(chunkSeq, chunkHeader, tileText) {
-  if (!aioliReady || !aioli) return null;
+  if (!toolsReady) return null;
   try {
-    // Build tile index once, reuse for all chunks
     await ensureTileIndex(tileText, currentTile?.key);
 
-    await aioli.mount([
-      { name: 'query.fa', data: `>${chunkHeader}\n${chunkSeq}\n` },
-    ]);
-    // Align against pre-built index (~20ms instead of ~400ms)
-    const result = await aioli.exec('minimap2 -a ref.mmi query.fa');
-    const stdout = typeof result === 'string' ? result : (result.stdout || '');
+    let stdout;
+    if (nzTools && nzTools.isLoaded('minimap2')) {
+      // ToolRegistry path
+      const result = await nzTools.exec('minimap2', ['-a', 'ref.mmi', 'query.fa'], {
+        'query.fa': `>${chunkHeader}\n${chunkSeq}\n`,
+      });
+      stdout = result.stdout;
+    } else if (aioliFallback) {
+      await aioliFallback.mount([{ name: 'query.fa', data: `>${chunkHeader}\n${chunkSeq}\n` }]);
+      const result = await aioliFallback.exec('minimap2 -a ref.mmi query.fa');
+      stdout = typeof result === 'string' ? result : (result.stdout || '');
+    } else {
+      return null;
+    }
 
     const hits = stdout.split('\n')
       .filter((l) => l && !l.startsWith('@'))
@@ -341,7 +375,6 @@ function highlightChr(chrName) {
 function updateProgress() {
   const pctEl = $('[data-nano-progress-pct]');
   if (pctEl) {
-    // Total alignments needed: 610,315 chunks × 686 tiles = 418,676,090
     const totalNeeded = TOTAL_CHUNKS * 686;
     const pct = (communityCount / totalNeeded) * 100;
     pctEl.textContent = `${pct.toFixed(4)}%`;
@@ -363,7 +396,6 @@ async function loadCommunityCount() {
     localStorage.setItem('cg-community', communityCount);
     if (el) el.textContent = communityCount.toLocaleString();
   } catch (e) {
-    // API failed — show cached value, never show 0
     const cached = parseInt(localStorage.getItem('cg-community') || '0');
     if (cached > communityCount) communityCount = cached;
     if (el) el.textContent = communityCount > 0 ? communityCount.toLocaleString() : `err: ${e.message}`;
@@ -373,8 +405,6 @@ async function loadCommunityCount() {
 }
 
 function updateCommunityCount() {
-  // DON'T increment locally — only show server truth
-  // Just trigger a refresh if enough time passed
   if (Date.now() - lastCommunityRefresh > 15000) {
     loadCommunityCount();
   }
@@ -386,23 +416,19 @@ function getSessionId() {
   return id;
 }
 
-// ---- Prefetch: load next 100 chunks in background ----
+// ---- Prefetch ----
 const PREFETCH_COUNT = 100;
 let prefetching = false;
 
 function prefetchAhead() {
   if (prefetching || prefetchCache.size >= PREFETCH_COUNT) return;
   prefetching = true;
-
-  // Grab next chunks from queue that aren't cached yet
   const toFetch = [];
   for (const id of chunkQueue) {
     if (!prefetchCache.has(id) && toFetch.length < PREFETCH_COUNT - prefetchCache.size) {
       toFetch.push(id);
     }
   }
-
-  // Fire all fetches concurrently (5KB each, ~500KB total — negligible)
   Promise.all(toFetch.map(async (id) => {
     const padded = String(id).padStart(6, '0');
     try {
@@ -413,7 +439,7 @@ function prefetchAhead() {
   })).finally(() => { prefetching = false; });
 }
 
-// ---- Queue: load from nano-zyrkel repo ----
+// ---- Queue ----
 async function loadQueue() {
   const posEl = $('[data-nano-chunk-pos]');
   if (posEl) posEl.textContent = 'reading queue from nano-zyrkel\u2026';
@@ -423,7 +449,6 @@ async function loadQueue() {
     if (!res.ok) throw new Error(`queue ${res.status}`);
     queueInfo = await res.json();
 
-    // Load tile if changed
     if (!currentTile || currentTile.key !== queueInfo.tile.key) {
       if (posEl) posEl.textContent = `loading GRCh38 ${queueInfo.tile.chr} tile ${queueInfo.tile.index} (~5MB)\u2026`;
       const tileRes = await fetch(queueInfo.tile.url);
@@ -431,15 +456,12 @@ async function loadQueue() {
       currentTile = { ...queueInfo.tile, text: await tileRes.text() };
     }
 
-    // Build chunk queue: auto-advance through ALL 610k chunks, never stop
-    // Start from where we left off (persisted in sessionStorage)
     let start = currentBlockStart;
     let end = start + 10000;
     let ids = [];
 
-    // Skip fully-done blocks
     let attempts = 0;
-    while (ids.length === 0 && attempts < 62) { // 62 blocks × 10k = 620k > 610k
+    while (ids.length === 0 && attempts < 62) {
       ids = [];
       for (let i = start; i < end && i < TOTAL_CHUNKS; i++) {
         if (!doneChunks.has(i)) ids.push(i);
@@ -448,24 +470,21 @@ async function loadQueue() {
         doneBlocks.add(start);
         start += 10000;
         end = start + 10000;
-        if (start >= TOTAL_CHUNKS) start = 0; // wrap around
+        if (start >= TOTAL_CHUNKS) start = 0;
         attempts++;
       }
     }
 
-    // Persist current position
     currentBlockStart = start;
     localStorage.setItem('cg-block-start', start);
     localStorage.setItem('cg-done-blocks', JSON.stringify([...doneBlocks]));
 
-    // Shuffle within block
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [ids[i], ids[j]] = [ids[j], ids[i]];
     }
     chunkQueue = ids;
 
-    // Prune doneChunks if it gets too large (keep only current block's IDs)
     if (doneChunks.size > 30000) {
       const keep = new Set();
       for (const id of doneChunks) {
@@ -502,7 +521,7 @@ async function analyzeChunk() {
   if (idEl) idEl.textContent = `#${chunkId.toLocaleString()}`;
   if (posEl) posEl.textContent = `vs ${currentTile.chr} tile ${currentTile.index} \u2014 ${chunkQueue.length} remaining`;
 
-  // ── FETCH chunk (5KB) — from prefetch cache or live ──
+  // ── FETCH ──
   setStep('fetch', 'active');
   const t0 = performance.now();
   let chunkText;
@@ -525,7 +544,6 @@ async function analyzeChunk() {
   setStep('fetch', 'done');
   setStepTime('fetch', Math.round(performance.now() - t0));
 
-  // Prefetch next 100 chunks in background (non-blocking)
   prefetchAhead();
 
   // ── PARSE ──
@@ -542,7 +560,7 @@ async function analyzeChunk() {
 
   if (!seq || seq.length < 100) { if (resultEl) resultEl.textContent = 'Chunk too short'; return; }
 
-  // ── ANALYZE (JS, always) ──
+  // ── ANALYZE ──
   setStep('analyze', 'active');
   const t3 = performance.now();
   const gc = computeGC(seq);
@@ -551,7 +569,6 @@ async function analyzeChunk() {
   setStep('analyze', 'done');
   setStepTime('analyze', Math.round(performance.now() - t3));
 
-  // Stats
   const gcEl = $('[data-nano-gc]');
   const entropyEl = $('[data-nano-entropy]');
   const repeatsEl = $('[data-nano-repeats]');
@@ -561,12 +578,12 @@ async function analyzeChunk() {
   if (repeatsEl) repeatsEl.textContent = repeats.count;
   if (lengthEl) lengthEl.textContent = `${seq.length.toLocaleString()} bp`;
 
-  // ── MINIMAP2 ──
+  // ── MINIMAP2 (via ToolRegistry or fallback) ──
   setStep('minimap2', 'active');
   const t2 = performance.now();
   let mm2 = null;
 
-  if (aioliReady) {
+  if (toolsReady) {
     mm2 = await runMinimap2(seq, header, currentTile.text);
   } else {
     const hc = document.getElementById('nano-hits');
@@ -577,14 +594,14 @@ async function analyzeChunk() {
   }
 
   const mm2Ms = Math.round(performance.now() - t2);
-  if (aioliReady) { setStep('minimap2', 'done'); setStepTime('minimap2', mm2Ms); }
+  if (toolsReady) { setStep('minimap2', 'done'); setStepTime('minimap2', mm2Ms); }
 
   const hasHits = mm2?.hits?.length > 0;
   const bestHit = hasHits ? mm2.hits[0] : null;
-  const minimap2Ran = aioliReady && mm2 && !mm2.error;
+  const minimap2Ran = toolsReady && mm2 && !mm2.error;
   const isDivergent = minimap2Ran && !hasHits;
 
-  // ── SUBMIT (fire & forget — non-blocking, next chunk starts immediately) ──
+  // ── SUBMIT ──
   const payload = JSON.stringify({
     chunk_id: chunkId, chr: pos.chr, start: pos.start, end: pos.end,
     length: seq.length, gc, entropy, unique_kmers: unique,
@@ -600,7 +617,6 @@ async function analyzeChunk() {
     compute_ms: mm2Ms,
     session_id: getSessionId(),
   });
-  // Batch results — send every 50 chunks as one request
   resultBatch.push(JSON.parse(payload));
   if (resultBatch.length >= 50) {
     const batch = JSON.stringify(resultBatch);
@@ -614,19 +630,16 @@ async function analyzeChunk() {
   }
   setStep('submit', 'done');
 
-  // Update community counter
   updateCommunityCount();
 
-  // Mark chunk as done locally (skip on future reloads)
   doneChunks.add(chunkId);
   if (doneChunks.size <= 50000) {
     localStorage.setItem('cg-done', JSON.stringify([...doneChunks]));
   }
 
-  // ── Update counters (only count verified minimap2 results) ──
   if (minimap2Ran) {
     sessionChunks++;
-    if (!hasHits) sessionDark++; // "not mapped yet" — no hit on THIS tile
+    if (!hasHits) sessionDark++;
     localStorage.setItem('cg-chunks', sessionChunks);
     localStorage.setItem('cg-dark', sessionDark);
   }
@@ -638,7 +651,6 @@ async function analyzeChunk() {
   highlightChr(pos.chr);
   updateProgress();
 
-  // ── Result display ──
   if (resultEl) {
     if (!minimap2Ran) {
       resultEl.className = 'nano-compute__result';
@@ -662,21 +674,16 @@ async function runLoop() {
 
   renderGenomeBar();
 
-  // Restore counters from session
   $('[data-nano-session-chunks]')?.replaceChildren(document.createTextNode(String(sessionChunks)));
   $('[data-nano-session-nothit]')?.replaceChildren(document.createTextNode(String(sessionDark)));
   updateProgress();
 
-  // Load community total from server
   loadCommunityCount();
-
-  // Load queue + tile
   await loadQueue();
 
-  // Start minimap2 in background
-  initAioli();
+  // Load tools (ToolRegistry path or Aioli fallback)
+  initTools();
 
-  // Flush remaining batch on page unload
   window.addEventListener('beforeunload', () => {
     if (resultBatch.length > 0) {
       navigator.sendBeacon(`${API}/result`, new Blob([JSON.stringify(resultBatch)], { type: 'text/plain' }));
@@ -684,13 +691,11 @@ async function runLoop() {
     }
   });
 
-  // Continuous loop — runs even when tab is in background
   async function loop() {
     await analyzeChunk();
     setTimeout(loop, document.hidden ? 200 : 100);
   }
   loop();
-
 }
 
 // ---- Init ----

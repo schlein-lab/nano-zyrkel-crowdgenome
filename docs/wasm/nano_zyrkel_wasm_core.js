@@ -1568,6 +1568,302 @@ export class Stats {
 if (Symbol.dispose) Stats.prototype[Symbol.dispose] = Stats.prototype.free;
 
 /**
+ * Central registry for WASM CLI tools. Create one per nano-zyrkel and
+ * register the tools it needs; they are lazy-loaded on first use.
+ */
+export class ToolRegistry {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ToolRegistryFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_toolregistry_free(ptr, 0);
+    }
+    /**
+     * Number of registered tools.
+     * @returns {number}
+     */
+    get count() {
+        const ret = wasm.toolregistry_count(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * Ensure a tool's WASM module is loaded. Called automatically by
+     * `exec`, but can be called explicitly for eager loading.
+     * @param {string} name
+     * @returns {Promise<void>}
+     */
+    ensureLoaded(name) {
+        const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.toolregistry_ensureLoaded(this.__wbg_ptr, ptr0, len0);
+        return takeObject(ret);
+    }
+    /**
+     * Mount files into a tool's virtual filesystem, run a command, and
+     * return the result.
+     *
+     * - `name`: Registered tool name.
+     * - `args`: Command-line arguments as a JS array of strings.
+     * - `files`: Optional object `{ filename: content_string }` to mount
+     *   before execution.
+     * @param {string} name
+     * @param {any} args
+     * @param {any} files
+     * @returns {Promise<ToolResult>}
+     */
+    exec(name, args, files) {
+        const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.toolregistry_exec(this.__wbg_ptr, ptr0, len0, addHeapObject(args), addHeapObject(files));
+        return takeObject(ret);
+    }
+    /**
+     * Check whether a specific tool is loaded.
+     * @param {string} name
+     * @returns {boolean}
+     */
+    isLoaded(name) {
+        const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.toolregistry_isLoaded(this.__wbg_ptr, ptr0, len0);
+        return ret !== 0;
+    }
+    /**
+     * Create an empty registry.
+     */
+    constructor() {
+        const ret = wasm.toolregistry_new();
+        this.__wbg_ptr = ret >>> 0;
+        ToolRegistryFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Run a pipeline of tools. Each step's stdout is piped to the next
+     * step's stdin via a temporary file.
+     *
+     * `steps` is a JS array of `{ tool: string, args: string[] }` objects.
+     * `files` are mounted before the first step.
+     * @param {any} steps
+     * @param {any} files
+     * @returns {Promise<ToolResult>}
+     */
+    pipe(steps, files) {
+        const ret = wasm.toolregistry_pipe(this.__wbg_ptr, addHeapObject(steps), addHeapObject(files));
+        return takeObject(ret);
+    }
+    /**
+     * Declare a tool. It is **not** loaded yet — only on first `exec`.
+     *
+     * - `name`: Tool name as known by the CDN (e.g. `"minimap2"`).
+     * - `version`: Exact version string (e.g. `"2.22"`).
+     * - `cdn`: CDN provider. Currently only `"biowasm"` is supported.
+     * @param {string} name
+     * @param {string} version
+     * @param {string} cdn
+     */
+    register(name, version, cdn) {
+        const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(version, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(cdn, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len2 = WASM_VECTOR_LEN;
+        wasm.toolregistry_register(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
+    }
+    /**
+     * Register multiple tools from a JS array of `{name, version, cdn?}` objects.
+     * Convenience for reading the tool list from `hats/config.json`.
+     * @param {any} tools_array
+     */
+    registerAll(tools_array) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.toolregistry_registerAll(retptr, this.__wbg_ptr, addHeapObject(tools_array));
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            if (r1) {
+                throw takeObject(r0);
+            }
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Return the status of all registered tools.
+     * @returns {ToolStatus[]}
+     */
+    status() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.toolregistry_status(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var v1 = getArrayJsValueFromWasm0(r0, r1).slice();
+            wasm.__wbindgen_export4(r0, r1 * 4, 4);
+            return v1;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * Unload a tool, freeing its WASM instance. The tool can be
+     * re-loaded later via `exec` or `ensureLoaded`.
+     * @param {string} name
+     */
+    unload(name) {
+        const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.toolregistry_unload(this.__wbg_ptr, ptr0, len0);
+    }
+}
+if (Symbol.dispose) ToolRegistry.prototype[Symbol.dispose] = ToolRegistry.prototype.free;
+
+/**
+ * Result of a single tool invocation.
+ */
+export class ToolResult {
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ToolResult.prototype);
+        obj.__wbg_ptr = ptr;
+        ToolResultFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ToolResultFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_toolresult_free(ptr, 0);
+    }
+    /**
+     * Wall-clock time in milliseconds.
+     * @returns {number}
+     */
+    get elapsedMs() {
+        const ret = wasm.toolresult_elapsedMs(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Standard error of the tool.
+     * @returns {string}
+     */
+    get stderr() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.toolresult_stderr(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Standard output of the tool.
+     * @returns {string}
+     */
+    get stdout() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.toolresult_stdout(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred1_0, deferred1_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ToolResult.prototype[Symbol.dispose] = ToolResult.prototype.free;
+
+/**
+ * Status of a single registered tool.
+ */
+export class ToolStatus {
+    static __wrap(ptr) {
+        ptr = ptr >>> 0;
+        const obj = Object.create(ToolStatus.prototype);
+        obj.__wbg_ptr = ptr;
+        ToolStatusFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        ToolStatusFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_toolstatus_free(ptr, 0);
+    }
+    /**
+     * @returns {boolean}
+     */
+    get loaded() {
+        const ret = wasm.toolstatus_loaded(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
+     * @returns {string}
+     */
+    get name() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.toolstatus_name(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    get version() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.toolstatus_version(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred1_0, deferred1_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) ToolStatus.prototype[Symbol.dispose] = ToolStatus.prototype.free;
+
+/**
  * Stateless namespace for URL ↔ state synchronization.
  */
 export class UrlState {
@@ -1876,6 +2172,10 @@ function __wbg_get_imports() {
             const ret = typeof(getObject(arg0)) === 'function';
             return ret;
         },
+        __wbg___wbindgen_is_null_344c8750a8525473: function(arg0) {
+            const ret = getObject(arg0) === null;
+            return ret;
+        },
         __wbg___wbindgen_is_object_40c5a80572e8f9d3: function(arg0) {
             const val = getObject(arg0);
             const ret = typeof(val) === 'object' && val !== null;
@@ -1950,6 +2250,10 @@ function __wbg_get_imports() {
             const ret = ConfigReader.__wrap(arg0);
             return addHeapObject(ret);
         },
+        __wbg_construct_adeb3d5948c3d19a: function() { return handleError(function (arg0, arg1) {
+            const ret = Reflect.construct(getObject(arg0), getObject(arg1));
+            return addHeapObject(ret);
+        }, arguments); },
         __wbg_createElement_8640e331213b402e: function() { return handleError(function (arg0, arg1, arg2) {
             const ret = getObject(arg0).createElement(getStringFromWasm0(arg1, arg2));
             return addHeapObject(ret);
@@ -2035,6 +2339,10 @@ function __wbg_get_imports() {
             const ret = Reflect.get(getObject(arg0), getObject(arg1));
             return addHeapObject(ret);
         }, arguments); },
+        __wbg_get_f96702c6245e4ef9: function() { return handleError(function (arg0, arg1) {
+            const ret = Reflect.get(getObject(arg0), getObject(arg1));
+            return addHeapObject(ret);
+        }, arguments); },
         __wbg_get_unchecked_7d7babe32e9e6a54: function(arg0, arg1) {
             const ret = getObject(arg0)[arg1 >>> 0];
             return addHeapObject(ret);
@@ -2078,6 +2386,16 @@ function __wbg_get_imports() {
             let result;
             try {
                 result = getObject(arg0) instanceof Map;
+            } catch (_) {
+                result = false;
+            }
+            const ret = result;
+            return ret;
+        },
+        __wbg_instanceof_Object_72ee0c53dd8f0726: function(arg0) {
+            let result;
+            try {
+                result = getObject(arg0) instanceof Object;
             } catch (_) {
                 result = false;
             }
@@ -2172,7 +2490,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_1723(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_1850(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -2214,7 +2532,7 @@ function __wbg_get_imports() {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wasm_bindgen_func_elem_1723(a, state0.b, arg0, arg1);
+                        return __wasm_bindgen_func_elem_1850(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -2249,9 +2567,17 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).next();
             return addHeapObject(ret);
         }, arguments); },
+        __wbg_now_2c44418ca0623664: function(arg0) {
+            const ret = getObject(arg0).now();
+            return ret;
+        },
         __wbg_now_88621c9c9a4f3ffc: function() {
             const ret = Date.now();
             return ret;
+        },
+        __wbg_of_bd8b695394d7645d: function(arg0, arg1) {
+            const ret = Array.of(getObject(arg0), getObject(arg1));
+            return addHeapObject(ret);
         },
         __wbg_ok_36f7b13b74596c24: function(arg0) {
             const ret = getObject(arg0).ok;
@@ -2264,6 +2590,10 @@ function __wbg_get_imports() {
             getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
             getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
         }, arguments); },
+        __wbg_performance_5ed3f6a3bbe36d0d: function(arg0) {
+            const ret = getObject(arg0).performance;
+            return isLikeNone(ret) ? 0 : addHeapObject(ret);
+        },
         __wbg_prototypesetcall_3e05eb9545565046: function(arg0, arg1, arg2) {
             Uint8Array.prototype.set.call(getArrayU8FromWasm0(arg0, arg1), getObject(arg2));
         },
@@ -2354,6 +2684,10 @@ function __wbg_get_imports() {
         __wbg_set_6c60b2e8ad0e9383: function(arg0, arg1, arg2) {
             getObject(arg0)[arg1 >>> 0] = takeObject(arg2);
         },
+        __wbg_set_8ee2d34facb8466e: function() { return handleError(function (arg0, arg1, arg2) {
+            const ret = Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
+            return ret;
+        }, arguments); },
         __wbg_set_aa391f3af1ff0e9c: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4) {
             getObject(arg0).set(getStringFromWasm0(arg1, arg2), getStringFromWasm0(arg3, arg4));
         }, arguments); },
@@ -2435,28 +2769,36 @@ function __wbg_get_imports() {
             const ret = getObject(arg0).toString();
             return addHeapObject(ret);
         },
+        __wbg_toolresult_new: function(arg0) {
+            const ret = ToolResult.__wrap(arg0);
+            return addHeapObject(ret);
+        },
+        __wbg_toolstatus_new: function(arg0) {
+            const ret = ToolStatus.__wrap(arg0);
+            return addHeapObject(ret);
+        },
         __wbg_value_7f6052747ccf940f: function(arg0) {
             const ret = getObject(arg0).value;
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 102, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1717);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 119, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_1844);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("CloseEvent")], shim_idx: 2, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_435);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_482);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000003: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("Event")], shim_idx: 2, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_435_2);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_482_2);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000004: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 2, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_435_3);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_482_3);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000005: function(arg0) {
@@ -2493,22 +2835,22 @@ function __wbg_get_imports() {
     };
 }
 
-function __wasm_bindgen_func_elem_435(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_435(arg0, arg1, addHeapObject(arg2));
+function __wasm_bindgen_func_elem_482(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_482(arg0, arg1, addHeapObject(arg2));
 }
 
-function __wasm_bindgen_func_elem_435_2(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_435_2(arg0, arg1, addHeapObject(arg2));
+function __wasm_bindgen_func_elem_482_2(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_482_2(arg0, arg1, addHeapObject(arg2));
 }
 
-function __wasm_bindgen_func_elem_435_3(arg0, arg1, arg2) {
-    wasm.__wasm_bindgen_func_elem_435_3(arg0, arg1, addHeapObject(arg2));
+function __wasm_bindgen_func_elem_482_3(arg0, arg1, arg2) {
+    wasm.__wasm_bindgen_func_elem_482_3(arg0, arg1, addHeapObject(arg2));
 }
 
-function __wasm_bindgen_func_elem_1717(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_1844(arg0, arg1, arg2) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wasm_bindgen_func_elem_1717(retptr, arg0, arg1, addHeapObject(arg2));
+        wasm.__wasm_bindgen_func_elem_1844(retptr, arg0, arg1, addHeapObject(arg2));
         var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
         var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
         if (r1) {
@@ -2519,8 +2861,8 @@ function __wasm_bindgen_func_elem_1717(arg0, arg1, arg2) {
     }
 }
 
-function __wasm_bindgen_func_elem_1723(arg0, arg1, arg2, arg3) {
-    wasm.__wasm_bindgen_func_elem_1723(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
+function __wasm_bindgen_func_elem_1850(arg0, arg1, arg2, arg3) {
+    wasm.__wasm_bindgen_func_elem_1850(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
 }
 
 
@@ -2564,6 +2906,15 @@ const SearchIndexFinalization = (typeof FinalizationRegistry === 'undefined')
 const StatsFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_stats_free(ptr >>> 0, 1));
+const ToolRegistryFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_toolregistry_free(ptr >>> 0, 1));
+const ToolResultFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_toolresult_free(ptr >>> 0, 1));
+const ToolStatusFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_toolstatus_free(ptr >>> 0, 1));
 const UrlStateFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_urlstate_free(ptr >>> 0, 1));

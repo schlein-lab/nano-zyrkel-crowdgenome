@@ -3,7 +3,6 @@
 // Karyogram, Contig Track, Alignment Detail, Live Feed, Pipeline
 // =====================================================================
 
-const GITHUB_RAW = 'https://raw.githubusercontent.com/schlein-lab/nano-zyrkel-crowdgenome/main';
 const API = 'https://chunks.zyrkel.com/api';
 
 // Chromosome sizes (GRCh38, in Mb, approximate)
@@ -52,17 +51,6 @@ async function loadStats() {
     }
   } catch { /* use demo data */ }
 
-  // Load LLM summary
-  try {
-    const res = await fetch(`${GITHUB_RAW}/staging/crowdgenome/llm-summary.json`);
-    if (res.ok) {
-      const data = await res.json();
-      setText('daily-summary', data.summary || 'No summary available yet.');
-      const time = document.getElementById('summary-time');
-      if (time && data.timestamp) time.textContent = new Date(data.timestamp).toLocaleString();
-    }
-  } catch { /* placeholder stays */ }
-
   // If no real data, generate demo
   if (Object.keys(chrCompletion).length === 0) {
     generateDemoData();
@@ -81,7 +69,6 @@ function generateDemoData() {
   setText('stat-contributors', '89');
   setText('stat-cpu', '4.2h');
   setText('stat-coverage', '3.8%');
-  setText('daily-summary', 'Early stage: 89 contributors have analyzed 1,247 chunks across all chromosomes. 23 candidate dark regions identified, primarily in centromeric and subtelomeric areas. Highest coverage on chr21 (12.3%) and chr22 (9.7%). Cross-referencing against ClinVar in progress.');
 }
 
 function generateDemoChunks(chr, completionPct) {

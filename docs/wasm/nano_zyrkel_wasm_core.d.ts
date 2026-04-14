@@ -508,6 +508,105 @@ export class Stats {
 }
 
 /**
+ * Central registry for WASM CLI tools. Create one per nano-zyrkel and
+ * register the tools it needs; they are lazy-loaded on first use.
+ */
+export class ToolRegistry {
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Ensure a tool's WASM module is loaded. Called automatically by
+     * `exec`, but can be called explicitly for eager loading.
+     */
+    ensureLoaded(name: string): Promise<void>;
+    /**
+     * Mount files into a tool's virtual filesystem, run a command, and
+     * return the result.
+     *
+     * - `name`: Registered tool name.
+     * - `args`: Command-line arguments as a JS array of strings.
+     * - `files`: Optional object `{ filename: content_string }` to mount
+     *   before execution.
+     */
+    exec(name: string, args: any, files: any): Promise<ToolResult>;
+    /**
+     * Check whether a specific tool is loaded.
+     */
+    isLoaded(name: string): boolean;
+    /**
+     * Create an empty registry.
+     */
+    constructor();
+    /**
+     * Run a pipeline of tools. Each step's stdout is piped to the next
+     * step's stdin via a temporary file.
+     *
+     * `steps` is a JS array of `{ tool: string, args: string[] }` objects.
+     * `files` are mounted before the first step.
+     */
+    pipe(steps: any, files: any): Promise<ToolResult>;
+    /**
+     * Declare a tool. It is **not** loaded yet — only on first `exec`.
+     *
+     * - `name`: Tool name as known by the CDN (e.g. `"minimap2"`).
+     * - `version`: Exact version string (e.g. `"2.22"`).
+     * - `cdn`: CDN provider. Currently only `"biowasm"` is supported.
+     */
+    register(name: string, version: string, cdn: string): void;
+    /**
+     * Register multiple tools from a JS array of `{name, version, cdn?}` objects.
+     * Convenience for reading the tool list from `hats/config.json`.
+     */
+    registerAll(tools_array: any): void;
+    /**
+     * Return the status of all registered tools.
+     */
+    status(): ToolStatus[];
+    /**
+     * Unload a tool, freeing its WASM instance. The tool can be
+     * re-loaded later via `exec` or `ensureLoaded`.
+     */
+    unload(name: string): void;
+    /**
+     * Number of registered tools.
+     */
+    readonly count: number;
+}
+
+/**
+ * Result of a single tool invocation.
+ */
+export class ToolResult {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Wall-clock time in milliseconds.
+     */
+    readonly elapsedMs: number;
+    /**
+     * Standard error of the tool.
+     */
+    readonly stderr: string;
+    /**
+     * Standard output of the tool.
+     */
+    readonly stdout: string;
+}
+
+/**
+ * Status of a single registered tool.
+ */
+export class ToolStatus {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    readonly loaded: boolean;
+    readonly name: string;
+    readonly version: string;
+}
+
+/**
  * Stateless namespace for URL ↔ state synchronization.
  */
 export class UrlState {
@@ -615,6 +714,9 @@ export interface InitOutput {
     readonly __wbg_i18n_free: (a: number, b: number) => void;
     readonly __wbg_router_free: (a: number, b: number) => void;
     readonly __wbg_searchindex_free: (a: number, b: number) => void;
+    readonly __wbg_toolregistry_free: (a: number, b: number) => void;
+    readonly __wbg_toolresult_free: (a: number, b: number) => void;
+    readonly __wbg_toolstatus_free: (a: number, b: number) => void;
     readonly __wbg_websocketclient_free: (a: number, b: number) => void;
     readonly aggregator_avg: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly aggregator_count: (a: number, b: number, c: number) => void;
@@ -700,6 +802,22 @@ export interface InitOutput {
     readonly stats_stdDev: (a: number, b: number) => number;
     readonly stats_sum: (a: number, b: number) => number;
     readonly stats_variance: (a: number, b: number) => number;
+    readonly toolregistry_count: (a: number) => number;
+    readonly toolregistry_ensureLoaded: (a: number, b: number, c: number) => number;
+    readonly toolregistry_exec: (a: number, b: number, c: number, d: number, e: number) => number;
+    readonly toolregistry_isLoaded: (a: number, b: number, c: number) => number;
+    readonly toolregistry_new: () => number;
+    readonly toolregistry_pipe: (a: number, b: number, c: number) => number;
+    readonly toolregistry_register: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
+    readonly toolregistry_registerAll: (a: number, b: number, c: number) => void;
+    readonly toolregistry_status: (a: number, b: number) => void;
+    readonly toolregistry_unload: (a: number, b: number, c: number) => void;
+    readonly toolresult_elapsedMs: (a: number) => number;
+    readonly toolresult_stderr: (a: number, b: number) => void;
+    readonly toolresult_stdout: (a: number, b: number) => void;
+    readonly toolstatus_loaded: (a: number) => number;
+    readonly toolstatus_name: (a: number, b: number) => void;
+    readonly toolstatus_version: (a: number, b: number) => void;
     readonly urlstate_onChange: (a: number, b: number) => void;
     readonly urlstate_read: (a: number) => void;
     readonly urlstate_write: (a: number, b: number) => void;
@@ -722,11 +840,11 @@ export interface InitOutput {
     readonly __wbg_stats_free: (a: number, b: number) => void;
     readonly __wbg_urlstate_free: (a: number, b: number) => void;
     readonly __wbg_dataloader_free: (a: number, b: number) => void;
-    readonly __wasm_bindgen_func_elem_1717: (a: number, b: number, c: number, d: number) => void;
-    readonly __wasm_bindgen_func_elem_1723: (a: number, b: number, c: number, d: number) => void;
-    readonly __wasm_bindgen_func_elem_435: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_435_2: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_435_3: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_1844: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_1850: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_482: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_482_2: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_482_3: (a: number, b: number, c: number) => void;
     readonly __wbindgen_export: (a: number, b: number) => number;
     readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_export3: (a: number) => void;
