@@ -1,7 +1,7 @@
 // =====================================================================
 // pangenome-worker.js — CrowdGenome: distributed pangenome alignment
 // ---------------------------------------------------------------------
-// 1. Read queue from nano-zyrkel repo (GitHub Raw: staging/queue/active.json)
+// 1. Ask API for active tile (server-side tile advancement)
 // 2. Load ONE GRCh38 tile (5MB, cached), then rattle through chunks
 // 3. Each chunk: fetch 5KB → minimap2 (via ToolRegistry) → submit to API
 // 4. nano-zyrkel binary orchestrates: checks results, advances queue
@@ -49,7 +49,7 @@ initWasmCore();
 const SPACES = 'https://crowdgenome.fra1.digitaloceanspaces.com';
 const REPO_RAW = 'https://raw.githubusercontent.com/schlein-lab/nano-zyrkel-crowdgenome/main';
 const API = 'https://chunks.zyrkel.com/api';
-const TOTAL_CHUNKS = 610_315;
+const TOTAL_CHUNKS = 256_271;  // chunks currently on DO Spaces
 const GENOME_SIZE = 3_051_512_954;
 
 const CHRS = [
