@@ -682,6 +682,21 @@ async function analyzeChunk() {
 }
 
 // ---- Loop ----
+// ---- Insight (LLM-generated teaching summary from binary) ----
+async function loadInsight() {
+  try {
+    const res = await fetch(`${REPO_RAW}/staging/crowdgenome/insight.json?t=${Math.floor(Date.now()/300000)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const el = $('[data-nano-insight]');
+    const text = $('[data-nano-insight-text]');
+    if (el && text && data.summary) {
+      text.textContent = data.summary;
+      el.hidden = false;
+    }
+  } catch {}
+}
+
 async function runLoop() {
   if (running) return;
   running = true;
@@ -693,6 +708,7 @@ async function runLoop() {
   updateProgress();
 
   loadCommunityCount();
+  loadInsight();
   await loadQueue();
 
   // Load tools (ToolRegistry path or Aioli fallback)
