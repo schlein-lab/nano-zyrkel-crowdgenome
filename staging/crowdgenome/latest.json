@@ -1,5 +1,5 @@
 {
-  "content_hash": "0:66127",
+  "content_hash": "0:67477",
   "extracted_value": {
     "active_index": 0,
     "active_key": "chr1:0-5000000",
@@ -7,13 +7,13 @@
     "items_completed": 0,
     "items_total": 686,
     "milestone": null,
-    "progress": 66127,
-    "progress_pct": 25.803543904694642,
+    "progress": 67477,
+    "progress_pct": 26.330330002224205,
     "progress_total": 256271
   },
   "hat_id": "crowdgenome",
   "matched": false,
   "source_url": "",
-  "summary": "Active: chr1:0-5000000 — 25.8% done (66127/256271)",
-  "timestamp": "2026-04-16T10:45:52.838592534+00:00"
+  "summary": "Active: chr1:0-5000000 — 26.3% done (67477/256271)",
+  "timestamp": "2026-04-16T11:45:54.218499595+00:00"
 }
