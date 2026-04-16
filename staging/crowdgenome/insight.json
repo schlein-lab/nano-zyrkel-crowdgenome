@@ -1,7 +1,7 @@
 {
-  "summary": "Processing item 1 of 686: chr1:0-5000000. 23.2% of work units completed (59506/256271).",
+  "summary": "Processing item 1 of 686: chr1:0-5000000. 23.5% of work units completed (60171/256271).",
   "context": "Distributed Dark Genome mapping — crowd-sourced pangenome alignment via browser WASM — 0 items done so far. Each item is processed until 80% of work units are covered, then the pipeline advances to the next.",
   "next_up": "Continuing on chr1:0-5000000. 57% remaining before advancement.",
-  "generated_at": "2026-04-16T03:45:11.533415580+00:00",
+  "generated_at": "2026-04-16T05:53:17.181496690+00:00",
   "backend": "static"
 }
